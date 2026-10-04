@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flash-OPD · Stop every rollout at its own boundary</title>
+<meta name="description" content="Flash-OPD: Fast On-Policy Distillation via adaptive trajectory-level boundary verification. 2.2x-7.5x faster than full OPD while maintaining or improving accuracy.">
+<link rel="canonical" href="https://onedean.github.io/Flash-OPD/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Flash-OPD: Fast On-Policy Distillation">
+<meta property="og:description" content="Stop every rollout at its own reliability boundary. 2.2x-7.5x faster on-policy distillation at matched or better accuracy.">
+<meta property="og:url" content="https://onedean.github.io/Flash-OPD/">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f97316'/%3E%3Cstop offset='1' stop-color='%23dc2626'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M18 5 9 18h6l-2 9 10-14h-6z' fill='%23fff'/%3E%3C/svg%3E">
+<script>
+  // choose language before first paint: ?lang=zh|en > saved choice > en
+  (function(){try{var q=new URLSearchParams(location.search).get('lang');var l=q||localStorage.getItem('flashopd-lang');if(l==='zh'){document.documentElement.classList.add('zh');document.documentElement.lang='zh-CN';}}catch(e){}})();
+</script>
+<style>
+:root{
+  --bg:#fafaf7; --card:#ffffff; --ink:#111827; --ink2:#374151; --muted:#6b7280; --line:#e7e5e4; --soft:#f4f3ef;
+  --flash:#dc2626; --flash2:#f97316; --opd:#2f6db3; --topd:#e0a526; --prune:#1f9e78;
+  --ver:#93c5fd; --newv:#fdba74; --ev:#991b1b; --ok:#15803d;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+html.zh .en, html:not(.zh) .zh{display:none !important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+html.zh body{line-height:1.72}
+a{color:inherit}
+math{font-family:"STIX Two Math","Cambria Math","Latin Modern Math",serif;font-size:1.08em}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.wrap{max-width:1160px;margin:0 auto;padding:0 28px}
+.eyebrow{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--flash);font-weight:700;margin-bottom:10px}
+h2{font-size:38px;line-height:1.15;letter-spacing:-.02em;margin:0 0 14px;font-weight:800}
+html.zh h2{letter-spacing:0;font-size:36px}
+h3{font-size:20px;margin:0 0 8px;font-weight:750;letter-spacing:-.01em}
+.lead{font-size:18px;color:var(--ink2);max-width:780px;margin:0 0 28px}
+section{padding:84px 0;border-top:1px solid var(--line)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.fcol{display:flex;flex-direction:column}
+.note{font-size:12.5px;color:var(--muted)}
+.p2{color:var(--ink2);font-size:14.5px;margin:0}
+
+/* nav */
+nav{position:sticky;top:0;z-index:40;background:rgba(250,250,247,.88);backdrop-filter:blur(10px) saturate(1.4);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;height:56px;gap:26px}
+nav .logo{font-weight:850;font-size:17px;letter-spacing:-.01em;text-decoration:none;display:flex;align-items:center;gap:8px;flex-shrink:0}
+nav .logo i{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--flash2),var(--flash));display:inline-block;position:relative}
+nav .logo i:after{content:"";position:absolute;left:8px;top:4px;width:6px;height:14px;background:#fff;clip-path:polygon(60% 0,0 55%,45% 55%,30% 100%,100% 40%,55% 40%)}
+nav .links{display:flex;gap:22px;font-size:14px;overflow-x:auto;white-space:nowrap}
+nav .links a{text-decoration:none;color:var(--muted)} nav .links a:hover{color:var(--ink)}
+nav .navr{margin-left:auto;display:flex;align-items:center;gap:12px;flex-shrink:0}
+nav .cta{font-size:13.5px;text-decoration:none;background:var(--ink);color:#fff;border-radius:999px;padding:6px 14px;white-space:nowrap}
+.langsw{display:inline-flex;border:1px solid var(--line);border-radius:999px;background:#fff;padding:2px}
+.langsw button{border:none;background:transparent;font-size:12.5px;font-weight:700;color:var(--muted);padding:4px 11px;border-radius:999px;cursor:pointer;font-family:inherit}
+.langsw button.on{background:var(--flash);color:#fff}
+
+/* hero */
+.hero{padding:66px 0 40px;border-top:none;background:
+  radial-gradient(900px 380px at 85% 0%,rgba(249,115,22,.09),transparent 70%),
+  radial-gradient(700px 300px at 0% 20%,rgba(47,109,179,.07),transparent 70%)}
+.hero .hgrid{display:grid;grid-template-columns:1.16fr 1fr;gap:44px;align-items:stretch}
+.hero h1{font-size:76px;line-height:.98;letter-spacing:-.045em;margin:0 0 14px;font-weight:900}
+.hero h1 span{background:linear-gradient(90deg,var(--flash2),var(--flash));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .tag{font-size:23px;line-height:1.35;font-weight:650;letter-spacing:-.01em;margin:0 0 16px}
+html.zh .hero .tag{letter-spacing:0;line-height:1.45}
+.hero p.sub{font-size:16.5px;color:var(--ink2);margin:0 0 22px;max-width:580px}
+.authors{font-size:16.5px;line-height:1.8;color:var(--ink);margin:0 0 22px}
+.authors .line{display:block}
+.authors .au{font-weight:400;white-space:nowrap;text-decoration:none;color:var(--ink)}
+.authors a.au{border-bottom:2px solid rgba(220,38,38,.35);transition:color .15s,border-color .15s}
+.authors a.au:hover{color:var(--flash);border-color:var(--flash)}
+.authors sup{font-size:11px;color:var(--muted);font-weight:600;margin-left:1px}
+.authors .affil{display:block;font-size:13px;color:var(--muted);margin-top:8px;line-height:1.5}
+.authors .au sup{color:#b8862b}
+.orgs{display:flex;flex-wrap:wrap;align-items:center;gap:10px 28px;margin-top:14px}
+.org{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:inherit;transition:transform .15s,opacity .15s}
+.org:hover{transform:translateY(-1px);opacity:.85}
+.org .on{font-size:16px;font-weight:700;color:#b8862b;margin-right:2px;font-family:Georgia,"Times New Roman",serif;font-variant-numeric:lining-nums}
+.org .mk{display:block;flex:0 0 auto}
+.org .mk-hy{width:30px;height:30px}
+.org .mk-ust{height:32px;width:auto}
+.org .wm{white-space:nowrap;line-height:1}
+.org .wm-hy{font-family:"Avenir Next","Futura","Helvetica Neue",Arial,sans-serif;font-style:italic;font-weight:600;font-size:21px;letter-spacing:.01em;color:#141414}
+.org .wm-ust{font-family:"Avenir Next","Gill Sans","Helvetica Neue",Arial,sans-serif;font-weight:500;font-size:19px;letter-spacing:.2em;color:#003974;margin-left:2px}
+.org .wm-ust small{font-size:.74em;letter-spacing:.06em;margin-left:.05em;font-weight:600}
+.btns{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:650;font-size:14.5px;padding:10px 18px;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer;font-family:inherit}
+.btn.ghost{background:#fff;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--ink)}
+.btn.off{background:#fff;color:#a8a29e;border-color:var(--line);cursor:default}
+.btn svg{width:16px;height:16px;fill:currentColor}
+.hero-vis{padding:16px 16px 14px;display:flex;flex-direction:column;justify-content:space-between;gap:10px}
+.hero-vis .chips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hero-vis .chips div{background:var(--soft);border-radius:10px;padding:8px 12px}
+.hero-vis .chips b{display:block;font-size:20px;font-weight:850;letter-spacing:-.02em;line-height:1.2}
+.hero-vis .chips span{font-size:11.5px;color:var(--muted)}
+.hero-vis .lg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.hero-vis .lg span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:12px;height:10px;border-radius:2px}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);margin-top:40px;border:1px solid var(--line);border-radius:var(--r);background:#fff;overflow:hidden}
+.stats>div{padding:18px;border-right:1px solid var(--line)}
+.stats>div:last-child{border-right:none}
+.stats .n{font-size:32px;font-weight:850;letter-spacing:-.03em;line-height:1.1}
+.stats .n.r{color:var(--flash)}
+.stats .l{font-size:12.8px;color:var(--muted);margin-top:4px;line-height:1.45}
+
+/* segmented */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;background:#fff;padding:3px}
+.seg button{border:none;background:transparent;padding:6px 14px;border-radius:999px;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit}
+.seg button.on{background:var(--ink);color:#fff}
+input[type=range]{accent-color:var(--flash);width:100%}
+
+/* problem */
+.ctrl-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+.sl{margin:0 0 12px}
+.sl label{display:flex;justify-content:space-between;font-size:13px;color:var(--ink2);font-weight:600}
+.sl label span.v{font-variant-numeric:tabular-nums;color:var(--flash);font-family:ui-monospace,Menlo,monospace}
+.sl small{display:block;color:var(--muted);font-size:11.5px;line-height:1.35;margin-top:-2px}
+.rollouts{display:flex;flex-direction:column;gap:11px;margin:24px 0 6px;position:relative}
+.ro{display:grid;grid-template-columns:78px 1fr;align-items:center;gap:10px;font-size:12.5px;color:var(--muted)}
+.track{position:relative;height:24px;background:repeating-linear-gradient(135deg,#f3f2ee 0 6px,#ecebe6 6px 12px);border-radius:5px;overflow:hidden}
+.track .seg1,.track .seg2,.track .seg3{position:absolute;top:0;bottom:0;transition:left .25s,width .25s}
+.track .seg1{background:var(--opd);left:0}
+.track .seg2{background:#fed7aa;border-left:1px solid #fff}
+.track .seg3{background:repeating-linear-gradient(135deg,#d6d3d1 0 4px,#a8a29e 4px 6px)}
+.track .bd{position:absolute;top:-2px;bottom:-2px;width:3px;background:var(--ok);transition:left .25s}
+.hline{position:absolute;top:-8px;bottom:-8px;width:0;border-left:2px dashed var(--flash2);pointer-events:none;transition:left .1s}
+.hline b{position:absolute;top:-20px;left:-30px;width:60px;text-align:center;font-size:11.5px;color:var(--flash2)}
+.tot{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:auto;padding-top:16px}
+.tot>div{background:var(--soft);border-radius:10px;padding:12px 14px}
+.tot .n{font-size:24px;font-weight:800;letter-spacing:-.02em}
+.tot .l{font-size:12.5px;color:var(--muted)}
+.bars{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.bar{display:grid;grid-template-columns:96px 1fr 64px;gap:10px;align-items:center;font-size:13px}
+.bar .b{height:20px;border-radius:4px;transition:width .6s}
+.bar .v{font-weight:700;font-variant-numeric:tabular-nums}
+.spread{margin-top:18px}
+.spread .h{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.spread .g{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.spread .g div{background:var(--soft);border-radius:10px;padding:8px 10px}
+.spread .g b{display:block;font-size:11.5px;color:var(--muted);font-weight:700}
+.spread .g span{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.why{margin-top:auto;padding-top:16px;border-top:1px solid var(--line)}
+.spacer{margin-top:20px}
+
+/* idea */
+.idea-grid{display:grid;grid-template-columns:1.12fr 1fr;gap:22px;align-items:stretch}
+.idea-grid .col{display:flex;flex-direction:column;gap:14px}
+.idea-grid .col>*{flex:1 1 0}
+.eqbox{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;overflow-x:auto;display:flex;flex-direction:column;justify-content:center}
+.eqbox .t{font-size:12px;color:var(--muted);margin-bottom:4px}
+.prop{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 20px;display:flex;gap:16px;align-items:center}
+.prop .num{flex:0 0 34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--flash2),var(--flash));color:#fff;font-weight:850;font-size:15px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(220,38,38,.22)}
+.prop h3{font-size:18px;margin:0 0 3px}
+.loop{display:grid;grid-template-columns:1fr 72px 1fr 72px 1fr;margin-top:22px;align-items:stretch}
+.loop .st{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.loop .st .i{font-weight:850;color:var(--flash);font-size:13px;letter-spacing:.08em}
+.loop .arr{display:flex;align-items:center;justify-content:center}
+.loop .arr svg{width:58px;height:34px;filter:drop-shadow(0 3px 6px rgba(220,38,38,.18))}
+.loopback{position:relative;height:58px;margin-top:2px}
+.loopback svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.loopback .pill2{position:absolute;left:50%;top:40px;transform:translate(-50%,-50%);background:#fff;border:1px solid #fed7aa;color:#9a3412;font-size:12.5px;font-weight:650;padding:3px 12px;border-radius:999px;white-space:nowrap}
+.key{margin-top:14px;border-radius:var(--r);padding:22px 24px;background:linear-gradient(135deg,#fff7ed,#fff);border:1px solid #fed7aa;display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.key h3{color:#9a3412}
+
+/* playground */
+.pg{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:stretch}
+.pg .panel{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column}
+.panel h4{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
+.panel h4:first-child{margin-top:0}
+.guar{margin-top:auto;border-radius:12px;padding:12px 14px;background:var(--soft);font-size:13px;color:var(--ink2);line-height:1.5}
+.guar.ok{background:#f0fdf4;border:1px solid #bbf7d0}
+.guar .big{font-size:17px;font-weight:800;color:var(--ok);font-family:"STIX Two Text","Times New Roman",serif;margin-bottom:2px}
+.guar .lab{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:4px}
+#ctrlBox{margin-bottom:16px}
+.pgmain{display:flex;flex-direction:column;gap:14px}
+.canvas-card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+canvas{width:100%;display:block}
+.pgbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pgbar .btn{padding:7px 14px;font-size:13px}
+.metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.metrics>div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.metrics .n{font-size:21px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.metrics .l{font-size:11.5px;color:var(--muted);line-height:1.3}
+table.log{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+table.log th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);font-weight:600}
+table.log td{padding:7px 8px;border-bottom:1px solid #f1f0ec}
+table.log tr.cur td{background:#fff7ed}
+table.log .f{font-family:"STIX Two Text","Times New Roman",serif;font-size:14px}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px}
+.badge.stop{background:#fee2e2;color:var(--flash)} .badge.go{background:#dbeafe;color:#1d4ed8} .badge.eos{background:#dcfce7;color:var(--ok)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:6px}
+.legend span{display:inline-flex;gap:6px;align-items:center}
+
+/* results */
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.tabs button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 14px;font-size:13.5px;cursor:pointer;text-align:left;line-height:1.3;color:var(--ink2);font-family:inherit}
+.tabs button small{display:block;color:var(--muted);font-size:11.5px}
+.tabs button.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset;color:var(--ink)}
+.mleg{display:flex;gap:16px;font-size:12.5px;color:var(--muted);flex-wrap:wrap;margin-bottom:6px}
+.mleg span{display:inline-flex;align-items:center;gap:6px}
+svg text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Helvetica,Arial,sans-serif}
+details{margin-top:18px}
+details summary{cursor:pointer;font-weight:650;font-size:14.5px;color:var(--ink2)}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px;font-variant-numeric:tabular-nums;background:#fff}
+table.t th,table.t td{padding:7px 8px;text-align:center;border-bottom:1px solid var(--line)}
+table.t thead th{border-top:2px solid var(--ink);border-bottom:1px solid var(--ink)}
+table.t td:first-child,table.t th:first-child{text-align:left}
+table.t tr.g td{background:var(--soft);color:var(--muted);font-style:italic;text-align:left;font-size:12.5px}
+table.t tr.o td{background:#fef2f2}
+table.t tr.o td:first-child{color:var(--flash);font-weight:750}
+table.t .best{font-weight:800}
+
+/* heat */
+.heat{display:grid;grid-template-columns:52px repeat(5,1fr);gap:4px;font-size:13px}
+.heat .h{font-size:11.5px;color:var(--muted);text-align:center;padding:4px 0}
+.heat .rl{display:flex;align-items:center;font-weight:700;color:var(--ink2)}
+.heat .c{border-radius:8px;padding:10px 4px;text-align:center;font-weight:750;font-variant-numeric:tabular-nums}
+.heat .c small{display:block;font-weight:500;font-size:10.5px;opacity:.8}
+.rgrid{display:grid;grid-template-columns:52px repeat(3,1fr);gap:4px;font-size:13px}
+.rgrid .c{border-radius:8px;padding:10px 4px;text-align:center;font-weight:750;font-variant-numeric:tabular-nums}
+.rgrid .c small{display:block;font-weight:500;font-size:11px}
+.rgrid .c.def{outline:2px solid var(--ink);outline-offset:-2px}
+.rgrid .h{font-size:11.5px;color:var(--muted);text-align:center;align-self:end}
+.rgrid .rl{display:flex;align-items:center;justify-content:flex-end;padding-right:6px;color:var(--muted);font-size:12px}
+
+pre.bib{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px 20px;font-size:13px;line-height:1.6;overflow-x:auto;margin:0}
+.limits{flex:1;display:flex;flex-direction:column;gap:12px}
+.lim{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-size:15px !important;display:flex;align-items:center}
+footer{padding:40px 0 60px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+
+@media (max-width:980px){
+  .tabs{grid-template-columns:1fr 1fr}
+  .hero .hgrid,.grid2,.key,.pg,.idea-grid{grid-template-columns:1fr}
+  .hero h1{font-size:56px}
+  .stats{grid-template-columns:repeat(2,1fr)} .stats>div{border-bottom:1px solid var(--line)}
+  .grid3{grid-template-columns:1fr}
+  .loop{grid-template-columns:1fr}
+  .loop .arr{height:44px} .loop .arr svg{transform:rotate(90deg)}
+  .loopback{display:none}
+  .metrics{grid-template-columns:repeat(3,1fr)}
+  nav .links{display:none}
+  .spread .g{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="logo" href="#top"><i></i>Flash-OPD</a>
+  <div class="links">
+    <a href="#problem"><span class="en">Problem</span><span class="zh">问题</span></a>
+    <a href="#idea"><span class="en">Idea</span><span class="zh">核心思想</span></a>
+    <a href="#playground"><span class="en">Playground</span><span class="zh">交互演示</span></a>
+    <a href="#results"><span class="en">Results</span><span class="zh">主要结果</span></a>
+    <a href="#efficiency"><span class="en">Efficiency</span><span class="zh">效率分析</span></a>
+    <a href="#analysis"><span class="en">Analysis</span><span class="zh">深入分析</span></a>
+    <a href="#cite"><span class="en">Cite</span><span class="zh">引用</span></a>
+  </div>
+  <div class="navr">
+    <a class="cta" href="#playground"><span class="en">Try the playground</span><span class="zh">交互演示</span></a>
+    <div class="langsw" id="langSw" role="group" aria-label="Language"><button data-l="en">EN</button><button data-l="zh">中文</button></div>
+  </div>
+</div></nav>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="top"><div class="wrap hgrid">
+  <div>
+    <div class="eyebrow"><span class="en">On-Policy Distillation · Rollout Efficiency</span><span class="zh">同策略蒸馏 · Rollout 效率</span></div>
+    <h1><span>Flash</span>-OPD</h1>
+    <p class="tag"><span class="en">Fast on-policy distillation that stops every rollout at its <i>own</i> reliability boundary.</span><span class="zh">快速同策略蒸馏：<br>让每条 rollout 都停在<i>自己的</i>可靠性边界上。</span></p>
+    <p class="sub"><span class="en">Shared rollout horizons cut some trajectories too early and over-serve others. Flash-OPD interleaves cached generation with teacher verification. It retires each trajectory once its exact count of low-compatibility events reaches a budget, which delivers <b>2.2×–7.5×</b> speedups over full OPD at matched or better accuracy.</span><span class="zh">共享的 rollout horizon 会让一部分轨迹截断过早，又让另一部分被过度解码。Flash-OPD 把带缓存的生成与教师验证交替进行：一旦某条轨迹的低兼容事件精确计数达到预算，就立即让它停止。在准确率持平甚至更高的前提下，相比完整 OPD 实现 <b>2.2×–7.5×</b> 加速。</span></p>
+    <div class="authors">
+      <span class="line"><a class="au" href="https://onedean.github.io/" target="_blank" rel="noopener">Wei Chen<sup>1,2,3</sup></a>, <span class="au">Junle Chen<sup>3</sup></span>, <span class="au">Yitong Yang<sup>1</sup></span>, <span class="au">Zhaoyang Xu<sup>1</sup></span>,</span>
+      <span class="line"><span class="au">Jiaxin Lin<sup>1</sup></span>, <span class="au">Yuxuan Liang<sup>2</sup></span>, <span class="au">Xiaofang Zhou<sup>3</sup></span>, <span class="au">Kai Wang<sup>1</sup></span>, <span class="au">Rui Chen<sup>1</sup></span></span>
+      <span class="orgs">
+        <a class="org" href="https://hunyuan.tencent.com/" target="_blank" rel="noopener" title="Tencent Hy"><b class="on">1</b><img class="mk mk-hy" src="assets/logos/tencent-hy-mark.png" alt=""><span class="wm wm-hy">Tencent Hy</span></a>
+        <a class="org" href="https://www.hkust-gz.edu.cn/" target="_blank" rel="noopener" title="HKUST(GZ)"><b class="on">2</b><img class="mk mk-ust" src="assets/logos/hkust-symbol.svg" alt=""><span class="wm wm-ust">HKUST<small>(GZ)</small></span></a>
+        <a class="org" href="https://hkust.edu.hk/" target="_blank" rel="noopener" title="HKUST"><b class="on">3</b><img class="mk mk-ust" src="assets/logos/hkust-symbol.svg" alt=""><span class="wm wm-ust">HKUST</span></a>
+      </span>
+      <span class="affil"><span class="en">Preprint, Sep 2026</span><span class="zh">预印本，2026 年 9 月</span></span>
+    </div>
+    <div class="btns">
+      <div class="btnrow">
+        <a class="btn" href="#playground"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span class="en">Try the playground</span><span class="zh">在线交互演示</span></a>
+        <a class="btn ghost" href="#cite"><svg viewBox="0 0 24 24"><path d="M7 7h4v4H8.5c0 1.7.8 2.6 2.5 3v2c-3-.4-4-2.4-4-5V7zm7 0h4v4h-2.5c0 1.7.8 2.6 2.5 3v2c-3-.4-4-2.4-4-5V7z"/></svg>BibTeX</a>
+      </div>
+      <div class="btnrow">
+        <span class="btn off"><span class="en">Paper · soon</span><span class="zh">论文 · 即将上线</span></span>
+        <span class="btn off"><span class="en">arXiv · soon</span><span class="zh">arXiv · 即将上线</span></span>
+        <span class="btn off"><span class="en">Code · soon</span><span class="zh">代码 · 即将上线</span></span>
+      </div>
+    </div>
+  </div>
+  <div class="card hero-vis">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <b style="font-size:14px"><span class="en">One prompt, eight rollouts</span><span class="zh">同一 prompt 的八条 rollout</span></b>
+      <div class="seg" id="heroMode"><button class="on" data-m="flash">Flash-OPD</button><button data-m="shared"><span class="en">Shared horizon</span><span class="zh">共享 horizon</span></button></div>
+    </div>
+    <svg id="heroSvg" viewBox="0 0 520 316" style="width:100%;display:block"></svg>
+    <div class="chips"><div><b id="hcCut" style="color:#c2410c">0 / 8</b><span><span class="en">rollouts with supervision cut early</span><span class="zh">监督被提前截断的 rollout</span></span></div><div><b id="hcOver" style="color:#57534e">0 / 8</b><span><span class="en">rollouts decoded far past E</span><span class="zh">越过 E 后仍大量解码的 rollout</span></span></div></div>
+    <div class="lg">
+      <span><i class="sw" style="background:var(--opd)"></i><span class="en">reliable prefix</span><span class="zh">可靠前缀</span></span>
+      <span><i class="sw" style="background:#fed7aa"></i><span class="en">supervision cut early</span><span class="zh">被提前截断的监督</span></span>
+      <span><i class="sw" style="background:repeating-linear-gradient(135deg,#d6d3d1 0 3px,#a8a29e 3px 5px)"></i><span class="en">decoded past boundary</span><span class="zh">越过边界的解码</span></span>
+      <span><i class="sw" style="background:var(--ok);width:3px"></i><span class="en">boundary E</span><span class="zh">边界 E</span></span>
+      <span class="note"><span class="en">illustrative</span><span class="zh">示意</span></span>
+    </div>
+  </div>
+</div>
+<div class="wrap">
+  <div class="stats">
+    <div><div class="n r">7.52×</div><div class="l"><span class="en">faster training on Qwen3-4B-Base ← Qwen3-4B (33.09 h → 4.40 h)</span><span class="zh">Qwen3-4B-Base ← Qwen3-4B 训练提速（33.09 h → 4.40 h）</span></div></div>
+    <div><div class="n">21.9×</div><div class="l"><span class="en">fewer response tokens per rollout on Qwen3-1.7B-Base ← Qwen3-4B</span><span class="zh">Qwen3-1.7B-Base ← Qwen3-4B 每条 rollout 保留的 token 更少</span></div></div>
+    <div><div class="n r">+3.35</div><div class="l"><span class="en">avg. in-domain accuracy vs. OPD (19.20 vs 15.85) on Qwen3-4B-Base</span><span class="zh">Qwen3-4B-Base 域内平均准确率高于 OPD（19.20 vs 15.85）</span></div></div>
+    <div><div class="n">8.71×</div><div class="l"><span class="en">cross-generation speedup, R1-1.5B ← Qwen3-4B, no pair-specific tuning</span><span class="zh">跨代组合 R1-1.5B ← Qwen3-4B 的加速，无需针对性调参</span></div></div>
+    <div><div class="n"><math><mover><mi>E</mi><mo>^</mo></mover><mo>≥</mo><mi>E</mi></math></div><div class="l"><span class="en">provably never stops before the defined reliability boundary</span><span class="zh">可证明：停止点永远不会早于所定义的可靠性边界</span></div></div>
+  </div>
+</div></section>
+
+<!-- ============ PROBLEM ============ -->
+<section id="problem"><div class="wrap">
+  <div class="eyebrow"><span class="en">01 · The problem</span><span class="zh">01 · 问题</span></div>
+  <h2><span class="en">One horizon per batch can't fit every trajectory.</span><span class="zh">整个 batch 共用一个 horizon，适配不了每条轨迹。</span></h2>
+  <p class="lead"><span class="en">OPD accelerators like TOPD (fixed truncation) and Prune-OPD (feedback-adapted horizon) choose a single rollout length <i>M</i> per batch. Reliable lengths vary across trajectories, so any <i>M</i> both <b>cuts useful supervision</b> on some rollouts and <b>wastes decoding</b> on others. Drag the horizon and see for yourself.</span><span class="zh">TOPD（固定截断）和 Prune-OPD（按反馈自适应 horizon）这类 OPD 加速方法，都给整个 batch 选同一个 rollout 长度 <i>M</i>。可不同轨迹的可靠长度差别很大：任何一个 <i>M</i> 都会在一些 rollout 上<b>截掉有用的监督</b>，又在另一些上<b>白白浪费解码</b>。拖动下面的 horizon 亲自试试。</span></p>
+  <div class="grid2">
+    <div class="card fcol">
+      <div class="ctrl-row">
+        <div class="seg" id="pMode"><button class="on" data-m="shared"><span class="en">Shared horizon M</span><span class="zh">共享 horizon M</span></button><button data-m="flash">Flash-OPD</button></div>
+        <span class="note"><span class="en">six rollouts of one prompt, illustrative boundaries</span><span class="zh">同一 prompt 的六条 rollout，边界为示意</span></span>
+      </div>
+      <div class="sl" id="mSl"><label><span><span class="en">Shared horizon M</span><span class="zh">共享 horizon M</span></span><span class="v" id="mVal">500</span></label><input type="range" id="mRange" min="50" max="1000" step="10" value="500"></div>
+      <div class="rollouts" id="pRows"></div>
+      <div class="tot">
+        <div><div class="n" id="pLost" style="color:#c2410c">0</div><div class="l"><span class="en">reliable tokens <b>cut early</b> (supervision lost)</span><span class="zh">被<b>提前截断</b>的可靠 token（监督损失）</span></div></div>
+        <div><div class="n" id="pWaste" style="color:#57534e">0</div><div class="l"><span class="en">tokens <b>decoded past</b> the boundary (wasted)</span><span class="zh"><b>越过边界</b>后解码的 token（计算浪费）</span></div></div>
+      </div>
+      <p class="note" style="margin:10px 0 0" id="pHint"></p>
+    </div>
+    <div class="card fcol">
+      <h3><span class="en">What the paper measured</span><span class="zh">论文实测</span></h3>
+      <p class="p2" style="margin-bottom:6px"><span class="en">Tokens decoded past the reliable length <i>E</i> per trajectory (Qwen3-1.7B-Base ← Qwen3-4B, Fig. 2 right). No method had any steps cut.</span><span class="zh">每条轨迹越过可靠长度 <i>E</i> 之后多解码的 token 数（Qwen3-1.7B-Base ← Qwen3-4B，Fig. 2 右）。所有方法都没有被截断的步。</span></p>
+      <div class="bars" id="wasteBars"></div>
+      <div class="spread">
+        <div class="h"><span class="en">Retained length Ê within one training step, min–max averaged over training (Table 7)</span><span class="zh">同一训练步内保留长度 Ê 的 min–max，取全程平均（Table 7）</span></div>
+        <div class="g">
+          <div><b>G1</b><span>830–3,509</span></div>
+          <div><b>G2</b><span>335–1,052</span></div>
+          <div><b>G3</b><span>126–672</span></div>
+          <div><b>G4</b><span>293–2,117</span></div>
+        </div>
+      </div>
+      <div class="why spacer">
+        <h3><span class="en">Why it happens</span><span class="zh">为什么会这样</span></h3>
+        <p class="p2"><span class="en">Reliability boundaries are <b>heterogeneous</b> within a batch and <b>drift</b> over training. On R1-1.5B ← JustRL-1.5B, TOPD's fixed 4,096 first exceeds the whole reliability range and later falls below its mean. On Qwen3-1.7B-Base, both TOPD and Prune-OPD stay far above <i>E</i><sub>max</sub>. A more sensitive horizon controller can't fix this, because the decision is made at the wrong granularity.</span><span class="zh">可靠性边界在 batch 内<b>高度异质</b>，并且随训练<b>不断漂移</b>。在 R1-1.5B ← JustRL-1.5B 上，TOPD 固定的 4,096 起初超过整个可靠范围，后来又低于其均值；在 Qwen3-1.7B-Base 上，TOPD 和 Prune-OPD 都远高于 <i>E</i><sub>max</sub>。换一个更灵敏的 horizon 控制器也解决不了，因为决策的粒度本身就错了。</span></p>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ============ IDEA ============ -->
+<section id="idea"><div class="wrap">
+  <div class="eyebrow"><span class="en">02 · The idea</span><span class="zh">02 · 核心思想</span></div>
+  <h2><span class="en">Don't predict the boundary. Verify it.</span><span class="zh">不去预测边界，而是验证边界。</span></h2>
+  <p class="lead"><span class="en">Flash-OPD counts top-<i>k</i> disagreements between student and teacher. Reliability is defined as a first-passage time of that count. The boundary is unknown before sampling, but whether a prefix has crossed it can be checked exactly.</span><span class="zh">Flash-OPD 统计学生与教师之间 top-<i>k</i> 不一致的次数，并把可靠性定义为这个计数的首达时间（first-passage time）。边界在采样前无从得知，但一个前缀是否已经越过边界，可以被精确判定。</span></p>
+
+  <div class="idea-grid">
+    <div class="col">
+      <div class="eqbox"><div class="t"><span class="en">Low-compatibility event at position τ (Eq. 3)</span><span class="zh">位置 τ 上的低兼容事件（Eq. 3）</span></div>
+        <math display="block"><mrow><msub><mi>φ</mi><mi>τ</mi></msub><mo>=</mo><mn>𝟙</mn><mrow><mo>[</mo><mfrac><mrow><mo stretchy="false">|</mo><msubsup><mi>K</mi><mi>τ</mi><mi>S</mi></msubsup><mo>∩</mo><msubsup><mi>K</mi><mi>τ</mi><mi>T</mi></msubsup><mo stretchy="false">|</mo></mrow><mi>k</mi></mfrac><mo>&lt;</mo><mi>η</mi><mo>]</mo></mrow></mrow></math></div>
+      <div class="eqbox"><div class="t"><span class="en">Reliability boundary = first passage of the count to the allowance B (Eq. 4)</span><span class="zh">可靠性边界 = 计数首次达到容忍预算 B 的位置（Eq. 4）</span></div>
+        <math display="block"><mrow><msub><mi>c</mi><mi>τ</mi></msub><mo>=</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>τ</mi></munderover><msub><mi>φ</mi><mi>i</mi></msub><mo>,</mo><mspace width="1.6em"></mspace><mi>E</mi><mo>=</mo><mo>min</mo><mo stretchy="false">{</mo><mi>τ</mi><mo>:</mo><msub><mi>c</mi><mi>τ</mi></msub><mo>≥</mo><mi>B</mi><mo stretchy="false">}</mo></mrow></math></div>
+      <div class="eqbox"><div class="t"><span class="en">Next verification point from the recent event rate (Eq. 5)</span><span class="zh">由近期事件率决定下一个验证点（Eq. 5）</span></div>
+        <math display="block"><mrow><mi>k</mi><mo>←</mo><mi>k</mi><mo>+</mo><mo>max</mo><mrow><mo>(</mo><msub><mi>k</mi><mtext>min</mtext></msub><mo>,</mo><mrow><mo>⌈</mo><mfrac><mrow><mi>ρ</mi><mo stretchy="false">(</mo><mi>B</mi><mo>−</mo><mi>c</mi><mo stretchy="false">)</mo></mrow><msub><mover><mi>λ</mi><mo>^</mo></mover><mi>k</mi></msub></mfrac><mo>⌉</mo></mrow><mo>)</mo></mrow><mo>,</mo><mspace width="1em"></mspace><msub><mover><mi>λ</mi><mo>^</mo></mover><mi>k</mi></msub><mo>=</mo><mfrac><mrow><msub><mi>c</mi><mi>k</mi></msub><mo>−</mo><msub><mi>c</mi><mrow><mi>k</mi><mo>−</mo><mi>W</mi></mrow></msub></mrow><mi>W</mi></mfrac></mrow></math></div>
+    </div>
+    <div class="col">
+      <div class="prop"><span class="num">1</span><div><h3><span class="en">Trajectory-specific</span><span class="zh">轨迹特异</span></h3><p class="p2"><span class="en">Each rollout has its own <i>E</i>, so the length decision has to be made per sequence.</span><span class="zh">每条 rollout 都有自己的 <i>E</i>，所以长度决策必须逐条序列来做。</span></p></div></div>
+      <div class="prop"><span class="num">2</span><div><h3><span class="en">Exact first-passage</span><span class="zh">精确首达</span></h3><p class="p2"><span class="en"><i>E</i> is the hitting time of an integer counter. It is checked on the observed prefix and never estimated.</span><span class="zh"><i>E</i> 是一个整数计数器的首达时间，直接在已观测的前缀上判定，从不估计。</span></p></div></div>
+      <div class="prop"><span class="num">3</span><div><h3><span class="en">Posterior</span><span class="zh">后验性</span></h3><p class="p2"><span class="en"><i>E</i> is unknown until <i>y</i> is sampled. So stopping has to move <i>inside</i> generation.</span><span class="zh">在 <i>y</i> 被采样出来之前，<i>E</i> 是未知的，所以停止判断必须挪到生成过程<i>内部</i>。</span></p></div></div>
+    </div>
+  </div>
+
+  <div class="loop">
+    <div class="st"><div class="i"><span class="en">STEP i</span><span class="zh">步骤 i</span></div><h3><span class="en">Generate to k</span><span class="zh">生成到 k</span></h3><p class="p2"><span class="en">Resume from the cached prefix and decode only new positions. Each token is decoded once.</span><span class="zh">从缓存的前缀继续，只解码新位置，每个 token 只解码一次。</span></p></div>
+    <div class="arr" aria-hidden="true"><svg viewBox="0 0 64 40"><defs><linearGradient id="ga1" x1="0" x2="1"><stop offset="0" stop-color="#fed7aa"/><stop offset=".55" stop-color="#f97316"/><stop offset="1" stop-color="#dc2626"/></linearGradient></defs><path d="M3 20 Q 22 17.6 40 15.2 L40 7.5 L61 20 L40 32.5 L40 24.8 Q 22 22.4 3 20 Z" fill="url(#ga1)"/></svg></div>
+    <div class="st"><div class="i"><span class="en">STEP ii</span><span class="zh">步骤 ii</span></div><h3><span class="en">Verify the count</span><span class="zh">验证计数</span></h3><p class="p2"><span class="en">Run the teacher and student on the new block and update the exact count <i>c</i><sub>k</sub>. <b>Locality</b> and <b>permanence</b> keep earlier rewards unchanged.</span><span class="zh">在新块上运行教师和学生，更新精确计数 <i>c</i><sub>k</sub>。<b>局部性</b>与<b>持久性</b>保证之前的 reward 不会改变。</span></p></div>
+    <div class="arr" aria-hidden="true"><svg viewBox="0 0 64 40"><path d="M3 20 Q 22 17.6 40 15.2 L40 7.5 L61 20 L40 32.5 L40 24.8 Q 22 22.4 3 20 Z" fill="url(#ga1)"/></svg></div>
+    <div class="st"><div class="i"><span class="en">STEP iii</span><span class="zh">步骤 iii</span></div><h3><span class="en">Stop or advance</span><span class="zh">停止或推进</span></h3><p class="p2"><span class="en">If <i>c</i> ≥ <i>B</i>, retire at the first crossing. Otherwise jump a fraction ρ of the estimated distance to the boundary.</span><span class="zh">若 <i>c</i> ≥ <i>B</i>，在首次越界处停止；否则按估计的剩余距离向前跳 ρ 的比例。</span></p></div>
+  </div>
+  <div class="loopback" aria-hidden="true">
+    <svg viewBox="0 0 1104 58" preserveAspectRatio="none"><defs><linearGradient id="ga2" x1="1" x2="0"><stop offset="0" stop-color="#dc2626"/><stop offset=".5" stop-color="#f97316"/><stop offset="1" stop-color="#fdba74"/></linearGradient></defs>
+      <path d="M944 2 C944 34 924 40 892 40 L212 40 C180 40 160 34 160 12" fill="none" stroke="url(#ga2)" stroke-width="2.6" stroke-dasharray="7 6" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <svg viewBox="0 0 1104 58" preserveAspectRatio="none"><path d="M152 16 L160 2 L168 16 Z" fill="#fdba74"/></svg>
+    <span class="pill2"><span class="en">c &lt; B → advance k and repeat</span><span class="zh">c &lt; B → 推进 k，继续循环</span></span>
+  </div>
+
+  <div class="key">
+    <div><h3><span class="en">The estimate decides <i>when to look</i>.</span><span class="zh">估计只决定<i>何时去看</i>。</span></h3><p class="p2" style="font-size:15px"><span class="en">The trailing-window rate λ̂ only places the next checkpoint: big jumps far from the boundary, small steps near it. Under a stable rate this takes <b>O(log B)</b> rounds, and always at most 1 + ⌈(L<sub>max</sub> − k<sub>0</sub>)/k<sub>min</sub>⌉.</span><span class="zh">滑动窗口事件率 λ̂ 只用来放置下一个检查点：离边界远时大步跳，靠近时小步逼近。事件率平稳时只需 <b>O(log B)</b> 轮，最坏也不超过 1 + ⌈(L<sub>max</sub> − k<sub>0</sub>)/k<sub>min</sub>⌉ 轮。</span></p></div>
+    <div><h3><span class="en">The count decides <i>whether to stop</i>.</span><span class="zh">计数决定<i>是否停止</i>。</span></h3><p class="p2" style="font-size:15px"><span class="en"><b>Proposition 1:</b> <math><mover><mi>E</mi><mo>^</mo></mover><mo>≥</mo><mi>E</mi></math> for any ρ ∈ (0, 1], any W, and any realization of λ̂. A bad estimate costs a few extra tokens (4.5%–10.9% overshoot in practice) and never any supervision.</span><span class="zh"><b>Proposition 1：</b>对任意 ρ ∈ (0, 1]、任意 W 以及 λ̂ 的任意取值，都有 <math><mover><mi>E</mi><mo>^</mo></mover><mo>≥</mo><mi>E</mi></math>。估计不准只会多解码几个 token（实测 overshoot 为 4.5%–10.9%），永远不会损失监督。</span></p></div>
+  </div>
+</div></section>
+
+<!-- ============ PLAYGROUND ============ -->
+<section id="playground"><div class="wrap">
+  <div class="eyebrow"><span class="en">03 · Interactive playground</span><span class="zh">03 · 交互演示</span></div>
+  <h2><span class="en">Watch one trajectory verify itself.</span><span class="zh">看一条轨迹如何边生成、边验证。</span></h2>
+  <p class="lead"><span class="en">This runs the batched stopping rule from the paper's Algorithm 2 on one trajectory. <b>Paper case</b> replays Figure 3 exactly. <b>Simulate</b> draws events from a synthetic drift profile so you can stress-test the controller. Note that the count curve is only drawn for positions that have actually been verified.</span><span class="zh">这里在单条轨迹上运行论文 Algorithm 2 的 batched 停止规则。<b>论文案例</b>精确复现 Figure 3；<b>模拟</b>模式从合成的漂移曲线中采样事件，可以拿来压力测试控制器。注意：计数曲线只画到真正被验证过的位置。</span></p>
+  <div class="pg">
+    <div class="panel">
+      <div class="seg" id="pgMode" style="margin-bottom:14px;align-self:flex-start"><button class="on" data-m="paper"><span class="en">Paper case (Fig. 3)</span><span class="zh">论文案例 (Fig. 3)</span></button><button data-m="sim"><span class="en">Simulate</span><span class="zh">模拟</span></button></div>
+      <div id="ctrlBox"></div>
+      <div class="guar" id="guar"></div>
+    </div>
+    <div class="pgmain">
+      <div class="canvas-card">
+        <div class="pgbar" style="justify-content:space-between;margin-bottom:8px">
+          <div class="pgbar">
+            <button class="btn" id="bPlay"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span id="bPlayT">Play</span></button>
+            <button class="btn ghost" id="bStep"><span class="en">Next round</span><span class="zh">下一轮</span></button>
+            <button class="btn ghost" id="bReset"><span class="en">Reset</span><span class="zh">重置</span></button>
+            <button class="btn ghost" id="bSeed" style="display:none"><span class="en">New sample</span><span class="zh">重新采样</span></button>
+          </div>
+          <span class="note" id="roundLbl"></span>
+        </div>
+        <canvas id="cv" height="300"></canvas>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--ver)"></i><span class="en">verified</span><span class="zh">已验证</span></span>
+          <span><i class="sw" style="background:var(--newv)"></i><span class="en">newly verified (this round)</span><span class="zh">本轮新验证</span></span>
+          <span><i class="sw" style="background:var(--ev);width:3px"></i><span class="en">low-compatibility event φ=1</span><span class="zh">低兼容事件 φ=1</span></span>
+          <span><i class="sw" style="background:#d6d3d1"></i><span class="en">decoded, dropped (overshoot)</span><span class="zh">已解码但丢弃（overshoot）</span></span>
+          <span><i class="sw" style="border-left:2px dashed #16a34a;width:2px;border-radius:0"></i><span class="en">verification point k</span><span class="zh">验证点 k</span></span>
+          <span><i class="sw" style="border-left:2px dashed var(--flash);width:2px;border-radius:0"></i><span class="en">stop Ê</span><span class="zh">停止点 Ê</span></span>
+          <span><i class="sw" style="border-top:2px dashed var(--flash2);height:0;width:14px;border-radius:0"></i><span class="en">λ̂ extrapolation</span><span class="zh">λ̂ 外推</span></span>
+        </div>
+      </div>
+      <div class="metrics" id="mets"></div>
+      <div class="canvas-card" style="padding:6px 8px">
+        <table class="log"><thead><tr><th>#</th><th><span class="en">decode</span><span class="zh">解码区间</span></th><th><span class="en">new events</span><span class="zh">新事件</span></th><th><span class="en">count c</span><span class="zh">计数 c</span></th><th><span class="en">rate λ̂</span><span class="zh">事件率 λ̂</span></th><th><span class="en">decision</span><span class="zh">决策</span></th></tr></thead><tbody id="logBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ============ RESULTS ============ -->
+<section id="results"><div class="wrap">
+  <div class="eyebrow"><span class="en">04 · Results</span><span class="zh">04 · 主要结果</span></div>
+  <h2><span class="en">Fastest in every pair, without giving up accuracy.</span><span class="zh">每组都最快，而且不牺牲准确率。</span></h2>
+  <p class="lead"><span class="en">The setup trains on DAPO-Math-17K for 203 steps (64 prompts × 4 samples) on 8× H20 and evaluates mean@16 on five competition-math benchmarks with a 31,744-token budget. All runs use one fixed Flash-OPD configuration: η = 0.7, B = 200, ρ = 1.0, k<sub>0</sub> = W = 128.</span><span class="zh">在 DAPO-Math-17K 上训练 203 步（每步 64 个 prompt × 4 个样本），使用 8× H20；在五个竞赛数学 benchmark 上报告 mean@16，解码预算 31,744 token。所有实验使用同一组 Flash-OPD 配置：η = 0.7，B = 200，ρ = 1.0，k<sub>0</sub> = W = 128。</span></p>
+  <div class="tabs" id="pairTabs"></div>
+  <div class="grid2">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><h3><span class="en">Accuracy by benchmark</span><span class="zh">各 benchmark 准确率</span></h3><span class="note">mean@16, %</span></div>
+      <div class="mleg" id="mleg1"></div>
+      <svg id="accSvg" viewBox="0 0 560 290" style="width:100%"></svg>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><h3><span class="en">Training time</span><span class="zh">训练时间</span></h3><span class="note"><span class="en">hours, 203 steps</span><span class="zh">小时，203 步</span></span></div>
+      <svg id="timeSvg" viewBox="0 0 560 290" style="width:100%"></svg>
+      <p class="note" id="pairNote" style="margin:4px 0 0"></p>
+    </div>
+  </div>
+  <div class="card" style="margin-top:22px">
+    <div class="grid2" style="align-items:center">
+      <div>
+        <h3><span class="en">The accuracy–cost frontier</span><span class="zh">准确率–成本前沿</span></h3>
+        <p class="p2" style="margin-bottom:12px"><span class="en">Each point is one accelerator on one teacher–student pair, showing speedup over vanilla OPD against the change in average accuracy. Flash-OPD sits farthest right in every pair. Its largest accuracy gain is on <b>Qwen3-4B-Base ← Qwen3-4B</b>, where students are prone to <i>length runaway</i>, and cutting off unreliable supervision appears to act as an implicit curriculum and regularizer.</span><span class="zh">每个点代表一种加速方法在一组教师–学生组合上的结果：横轴是相对 vanilla OPD 的加速比，纵轴是平均准确率的变化。Flash-OPD 在每一组都位于最右侧。准确率提升最大的是 <b>Qwen3-4B-Base ← Qwen3-4B</b>：这组学生容易出现 <i>length runaway</i>，及时截掉不可靠的监督，似乎起到了隐式课程与正则化的作用。</span></p>
+        <p class="p2"><span class="en">It isn't a free lunch everywhere. On <b>R1-1.5B ← R1-7B</b> Flash-OPD is 5.32× faster but 0.61 points lower on average, the largest drop among the four pairs.</span><span class="zh">它也不是处处免费。在 <b>R1-1.5B ← R1-7B</b> 上，Flash-OPD 快 5.32×，但平均准确率低 0.61 分，是四组里下降最多的。</span></p>
+      </div>
+      <div><div class="mleg" id="mleg2"></div><svg id="scSvg" viewBox="0 0 520 330" style="width:100%"></svg></div>
+    </div>
+  </div>
+  <details><summary><span class="en">Full Table 2 (all pairs, all methods)</span><span class="zh">完整 Table 2（全部组合与方法）</span></summary><div style="overflow-x:auto"><table class="t" id="t2"></table></div></details>
+</div></section>
+
+<!-- ============ EFFICIENCY ============ -->
+<section id="efficiency"><div class="wrap">
+  <div class="eyebrow"><span class="en">05 · Where the time goes</span><span class="zh">05 · 时间花在哪里</span></div>
+  <h2><span class="en">Shorter rollouts, no separate log-prob pass, cheaper updates.</span><span class="zh">更短的 rollout、省掉单独的 log-prob 计算、更轻的参数更新。</span></h2>
+  <p class="lead"><span class="en">Per-step wall-clock decomposition (Table 6). Verification already computes student and teacher outputs, and these are reused in the loss, so the log-prob stage disappears. Fewer retained tokens also shrink the policy update.</span><span class="zh">每步 wall-clock 时间分解（Table 6）。验证阶段已经算出学生和教师的输出，并在 loss 中直接复用，所以 log-prob 阶段整个消失；保留的 token 变少，policy update 也随之变轻。</span></p>
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="en">Seconds per training step</span><span class="zh">每个训练步耗时（秒）</span></h3>
+      <div class="mleg" id="stageLeg"></div>
+      <svg id="stackSvg" viewBox="0 0 560 360" style="width:100%"></svg>
+    </div>
+    <div class="card">
+      <h3><span class="en">Retained length vs. OPD response length</span><span class="zh">保留长度 vs. OPD 响应长度</span></h3>
+      <div class="mleg"><span><i class="sw" style="background:#a8a29e"></i><span class="en">OPD response length</span><span class="zh">OPD 响应长度</span></span><span><i class="sw" style="background:var(--flash)"></i><span class="en">Flash-OPD mean Ê</span><span class="zh">Flash-OPD 平均 Ê</span></span><span><i class="sw" style="background:#fecaca"></i><span class="en">Flash-OPD min–max</span><span class="zh">Flash-OPD min–max</span></span></div>
+      <svg id="lenSvg" viewBox="0 0 560 360" style="width:100%"></svg>
+    </div>
+  </div>
+  <div class="card" style="margin-top:22px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><h3><span class="en">Mechanism counters</span><span class="zh">机制统计</span></h3><span class="note"><span class="en">Table 7 · per-step averages over 256 trajectories and all 203 steps</span><span class="zh">Table 7 · 每步 256 条轨迹、全部 203 步的平均值</span></span></div>
+    <div style="overflow-x:auto"><table class="t">
+      <thead><tr><th><span class="en">Pair</span><span class="zh">组合</span></th><th>Ê min / mean / max</th><th><span class="en">Stop: allowance / L<sub>max</sub> / EOS</span><span class="zh">停止原因：预算 / L<sub>max</sub> / EOS</span></th><th><span class="en">Verify rounds</span><span class="zh">验证轮数</span></th><th><span class="en">Verify amplification</span><span class="zh">验证放大</span></th><th>Overshoot</th></tr></thead>
+      <tbody>
+        <tr><td>G1 &nbsp;R1-1.5B ← JustRL-1.5B</td><td>830 / 2,708 / 3,509</td><td>130 / 96 / 30</td><td>2.64</td><td>1.54×</td><td>231 (8.5%)</td></tr>
+        <tr><td>G2 &nbsp;R1-1.5B ← R1-7B</td><td>335 / 585 / 1,052</td><td>256 / 0 / 0</td><td>6.23</td><td>2.41×</td><td>26 (4.5%)</td></tr>
+        <tr><td>G3 &nbsp;Qwen3-1.7B-Base ← Qwen3-4B</td><td>126 / 304 / 672</td><td>243 / 0 / 13</td><td>4.98</td><td>2.23×</td><td>14 (4.5%)</td></tr>
+        <tr><td>G4 &nbsp;Qwen3-4B-Base ← Qwen3-4B</td><td>293 / 569 / 2,117</td><td>250 / 0 / 6</td><td>6.23</td><td>2.19×</td><td>62 (10.9%)</td></tr>
+      </tbody></table></div>
+    <p class="note" style="margin:10px 0 0"><span class="en">The allowance decides most stops on G2–G4. G1 uses k<sub>0</sub> = W = 1024, k<sub>min</sub> = 512 and L<sub>max</sub> = 4400 because its trusted prefix is typically longer, so many of its trajectories reach the context limit.</span><span class="zh">G2–G4 上绝大多数停止由容忍预算触发。G1 的可信前缀通常更长，因此使用 k<sub>0</sub> = W = 1024、k<sub>min</sub> = 512、L<sub>max</sub> = 4400，不少轨迹会触达上下文上限。</span></p>
+  </div>
+</div></section>
+
+<!-- ============ ANALYSIS ============ -->
+<section id="analysis"><div class="wrap">
+  <div class="eyebrow"><span class="en">06 · Transfer, scale, robustness</span><span class="zh">06 · 迁移、扩展与鲁棒性</span></div>
+  <h2><span class="en">The gains hold up off-distribution and at scale.</span><span class="zh">在分布外和更大规模下，收益依然成立。</span></h2>
+  <div class="grid2">
+    <div class="card">
+      <h3><span class="en">Out-of-domain transfer</span><span class="zh">分布外迁移</span></h3>
+      <p class="note" style="margin:0 0 10px"><span class="en">Flash-OPD minus OPD accuracy (points), mean@4. GPQA is not mathematics. Hover a cell for the raw values.</span><span class="zh">Flash-OPD 减 OPD 的准确率差（分），mean@4。GPQA 为非数学任务。悬停可查看原始数值。</span></p>
+      <div class="heat" id="heat"></div>
+      <p class="p2" style="font-size:14px;margin-top:12px"><span class="en">Macro differences stay within <b>1.4 points</b> on G1–G3. On G4 every held-out benchmark improves, for a <b>+5.84</b> macro gain.</span><span class="zh">G1–G3 上宏平均差异都在 <b>1.4 分</b>以内；G4 上所有 held-out benchmark 都有提升，宏平均 <b>+5.84</b>。</span></p>
+    </div>
+    <div class="card">
+      <h3><span class="en">Across model generations</span><span class="zh">跨模型代际</span></h3>
+      <p class="note" style="margin:0 0 10px"><span class="en">R1-1.5B student, Qwen3-4B teacher, same Flash-OPD config (Table 9)</span><span class="zh">学生 R1-1.5B，教师 Qwen3-4B，Flash-OPD 配置不变（Table 9）</span></p>
+      <svg id="xgenSvg" viewBox="0 0 520 290" style="width:100%"></svg>
+      <p class="p2" style="font-size:14px;margin-top:8px"><span class="en">Matches OPD (<b>28.45</b> vs 28.34 avg.) while cutting training from <b>12.02 h to 1.38 h</b>.</span><span class="zh">平均准确率与 OPD 持平（<b>28.45</b> vs 28.34），训练时间从 <b>12.02 h 降到 1.38 h</b>。</span></p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px"><h3><span class="en">Scaling the teacher: 4B → 14B → 32B</span><span class="zh">扩大教师规模：4B → 14B → 32B</span></h3><span class="note"><span class="en">Qwen3-1.7B-Base student (Fig. 7)</span><span class="zh">学生固定为 Qwen3-1.7B-Base（Fig. 7）</span></span></div>
+    <div class="grid3" style="margin-top:6px">
+      <div><svg id="sc1" viewBox="0 0 340 230" style="width:100%"></svg></div>
+      <div><svg id="sc2" viewBox="0 0 340 230" style="width:100%"></svg></div>
+      <div><svg id="sc3" viewBox="0 0 340 230" style="width:100%"></svg></div>
+    </div>
+    <p class="p2" style="font-size:14px;margin-top:6px"><span class="en">From 4B to 32B, step time rises by <b>26.5 s</b> for Flash-OPD and 100.6 s for OPD, which is <b>73.7% less added time</b>. Flash-OPD accuracy stays at 8.5–8.9% while OPD falls to 7.38%, and the Flash-OPD rollout length barely moves (304 → 319).</span><span class="zh">从 4B 到 32B，Flash-OPD 每步时间只增加 <b>26.5 s</b>，OPD 增加 100.6 s，即<b>新增耗时少 73.7%</b>。Flash-OPD 准确率稳定在 8.5–8.9%，OPD 则降到 7.38%；Flash-OPD 的 rollout 长度几乎不变（304 → 319）。</span></p>
+  </div>
+
+  <div class="card" style="margin-top:22px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h3 style="margin:0"><span class="en">Robustness to η, B and ρ</span><span class="zh">对 η、B、ρ 的鲁棒性</span></h3>
+      <div class="seg" id="robSeg"><button class="on" data-p="g1">R1-1.5B ← JustRL-1.5B</button><button data-p="g3">Qwen3-1.7B-Base ← Qwen3-4B</button></div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div>
+        <p class="note" style="margin:0 0 6px"><span class="en">Cell: avg. accuracy / retained tokens. The outlined cell is the default (η = 0.7, B = 200). Color shows the change from the default.</span><span class="zh">格内为平均准确率 / 保留 token 数；描边格为默认配置（η = 0.7，B = 200），颜色表示相对默认值的变化。</span></p>
+        <div class="rgrid" id="rgrid"></div>
+        <p class="note" style="text-align:center;margin:6px 0 0"><span class="en">allowance B →&nbsp;&nbsp; | &nbsp;&nbsp;threshold η ↓</span><span class="zh">容忍预算 B →&nbsp;&nbsp; | &nbsp;&nbsp;阈值 η ↓</span></p>
+      </div>
+      <div>
+        <p class="note" style="margin:0 0 6px"><span class="en">Step discount ρ on R1-1.5B ← R1-7B</span><span class="zh">R1-1.5B ← R1-7B 上的步长折扣 ρ</span></p>
+        <table class="t"><thead><tr><th>ρ</th><th>0.50</th><th>0.70</th><th>0.85</th><th>1.00</th></tr></thead>
+        <tbody><tr><td><span class="en">Avg. (%)</span><span class="zh">平均（%）</span></td><td>29.86</td><td>29.67</td><td>30.11</td><td>29.75</td></tr>
+        <tr><td><span class="en">Verify rounds</span><span class="zh">验证轮数</span></td><td>11.08</td><td>8.51</td><td>7.23</td><td>6.23</td></tr>
+        <tr><td>Token overshoot</td><td>8</td><td>10</td><td>15</td><td>26</td></tr></tbody></table>
+        <p class="p2" style="font-size:14px;margin-top:12px"><span class="en">Performance only degrades at extreme thresholds, and a larger B partly offsets a high η. ρ trades rounds against overshoot, while accuracy stays within a 0.44-point band, as Proposition 1 predicts.</span><span class="zh">只有阈值取极端值时性能才明显下降，且更大的 B 能部分抵消过高的 η。ρ 在验证轮数和 overshoot 之间权衡，准确率始终落在 0.44 分的区间内，与 Proposition 1 的预期一致。</span></p>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ============ LIMITS + CITE ============ -->
+<section id="cite"><div class="wrap">
+  <div class="grid2">
+    <div class="fcol">
+      <div class="eyebrow"><span class="en">07 · Limitations</span><span class="zh">07 · 局限</span></div>
+      <h3><span class="en">What the guarantee does and doesn't cover</span><span class="zh">这个保证覆盖什么、不覆盖什么</span></h3>
+      <div class="limits"><p class="p2 lim"><span class="en"><b>Compatibility proxy.</b> Top-<i>k</i> overlap can be evaluated online on partial prefixes, but the stopping guarantee covers the boundary this criterion <i>defines</i>. It doesn't directly guarantee downstream accuracy. Richer signals that can still be computed online are an open direction.</span><span class="zh"><b>兼容性代理指标。</b>Top-<i>k</i> overlap 可以在部分前缀上在线计算，但停止保证针对的是该准则<i>所定义</i>的边界，并不直接保证下游准确率。更丰富、且仍能在线计算的信号是一个开放方向。</span></p>
+      <p class="p2 lim"><span class="en"><b>Token-level only.</b> Sequence-level objectives such as outcome rewards need the finished response, so applying this stopping rule directly could remove information the reward depends on. Future work targets multi-teacher OPD and agent tasks.</span><span class="zh"><b>仅适用于 token 级监督。</b>outcome reward 这类序列级目标依赖完整回答，直接套用该停止规则可能丢掉 reward 所需的信息。后续工作将扩展到多教师 OPD 和 agent 任务。</span></p></div>
+    </div>
+    <div>
+      <div class="eyebrow"><span class="en">08 · Citation</span><span class="zh">08 · 引用</span></div>
+      <h3>BibTeX</h3>
+<pre class="bib mono" id="bib">@article{chen2026flashopd,
+  title   = {Flash-OPD: Fast On-Policy Distillation},
+  author  = {Chen, Wei and Chen, Junle and Yang, Yitong and
+             Xu, Zhaoyang and Lin, Jiaxin and Liang, Yuxuan and
+             Zhou, Xiaofang and Wang, Kai and Chen, Rui},
+  journal = {Preprint},
+  year    = {2026}
+}</pre>
+      <button class="btn ghost" style="margin-top:10px" id="copyBib"></button>
+    </div>
+  </div>
+</div></section>
+
+<footer><div class="wrap"><span class="en">Flash-OPD · Tencent Hy, HKUST(GZ), HKUST. Every number on this page comes from the paper. Visuals marked <i>illustrative</i> and the <i>Simulate</i> mode use synthetic trajectories. arXiv and code links will be added on release.</span><span class="zh">Flash-OPD · Tencent Hy、HKUST(GZ)、HKUST。本页所有数字均来自论文；标注为<i>示意</i>的图和<i>模拟</i>模式使用合成轨迹。arXiv 与代码链接将在发布后补充。</span></div></footer>
+
+<script>
+/* ======================= helpers + i18n ======================= */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let LANG=document.documentElement.classList.contains('zh')?'zh':'en';
+const T=(en,zh)=>LANG==='zh'?zh:en;
+const RENDER=[];
+const C={flash:'#dc2626',flash2:'#f97316',opd:'#2f6db3',topd:'#e0a526',prune:'#1f9e78',ink:'#111827',ink2:'#374151',muted:'#6b7280',line:'#e7e5e4',grid:'#efeee9',ok:'#15803d'};
+const MC={'OPD':C.opd,'TOPD':C.topd,'Prune-OPD':C.prune,'Flash-OPD':C.flash};
+const fmt=(v,d=0)=>Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+function el(tag,a={},txt){let s='<'+tag;for(const k in a)s+=` ${k}="${a[k]}"`;return s+(txt!==undefined?'>'+txt+'</'+tag+'>':'/>');}
+function niceMax(v){const p=Math.pow(10,Math.floor(Math.log10(v)));const n=v/p;const s=[1,1.2,1.5,2,2.5,3,4,5,6,8,10].find(x=>n<=x);return s*p;}
+function legend(id,items){$(id).innerHTML=items.map(([n,c])=>`<span><i class="sw" style="background:${c}"></i>${n}</span>`).join('');}
+function setLang(l){
+  LANG=l==='zh'?'zh':'en';
+  document.documentElement.classList.toggle('zh',LANG==='zh');
+  document.documentElement.lang=LANG==='zh'?'zh-CN':'en';
+  document.title=T('Flash-OPD · Stop every rollout at its own boundary','Flash-OPD · 让每条 rollout 停在自己的边界');
+  $$('#langSw button').forEach(b=>b.classList.toggle('on',b.dataset.l===LANG));
+  try{localStorage.setItem('flashopd-lang',LANG);}catch(e){}
+  RENDER.forEach(f=>f());
+}
+$$('#langSw button').forEach(b=>b.onclick=()=>setLang(b.dataset.l));
+
+/* ======================= HERO animation ======================= */
+(function(){
+  const svg=$('#heroSvg'); const E=[0.78,0.36,0.58,0.22,0.9,0.47,0.66,0.3]; const X0=70,X1=505,Y0=22,RH=34,M=0.55;
+  let mode='flash', t0=performance.now();
+  $$('#heroMode button').forEach(b=>b.onclick=()=>{$$('#heroMode button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=b.dataset.m;t0=performance.now();});
+  const ck=E.map(e=>{const a=[0.12];let k=0.12;while(k<e){k=Math.min(e+0.015,k+Math.max(0.03,(e-k)*0.75+0.01));a.push(k);}return a;});
+  function frame(now){
+    const tt=Math.max(0,(now-t0)/1000)%7.5, prog=Math.max(0,Math.min(1,tt/4.2)); const W=X1-X0; let s='';
+    s+=el('text',{x:X1,y:12,'text-anchor':'end','font-size':10.5,fill:C.muted},T('position τ →','位置 τ →'));
+    E.forEach((e,i)=>{
+      const y=Y0+i*RH+6, h=16;
+      s+=el('text',{x:0,y:y+12,'font-size':11,fill:C.muted},'rollout '+(i+1));
+      s+=el('rect',{x:X0,y,width:W,height:h,rx:4,fill:'#f1f0ec'});
+      const front=prog;
+      if(mode==='flash'){
+        const stopAt=ck[i][ck[i].length-1]; const cur=Math.min(front,stopAt);
+        const rel=Math.min(cur,e); s+=el('rect',{x:X0,y,width:Math.max(0,W*rel),height:h,rx:4,fill:C.opd});
+        if(cur>e) s+=el('rect',{x:X0+W*e,y,width:W*(cur-e),height:h,fill:'url(#hatch)'});
+        ck[i].forEach(k=>{ if(k<=cur+1e-9){ s+=el('circle',{cx:X0+W*Math.min(k,1),cy:y-4,r:3.2,fill:'#fff',stroke:'#16a34a','stroke-width':1.6}); }});
+        if(front>=stopAt){ s+=el('rect',{x:X0+W*e-1.5,y:y-3,width:3,height:h+6,fill:C.ok});
+          s+=el('text',{x:X0+W*stopAt+8,y:y+12,'font-size':10.5,fill:C.ok,'font-weight':700},T('retired','已停止')); }
+      }else{
+        const cur=Math.min(front,M);
+        s+=el('rect',{x:X0,y,width:Math.max(0,W*Math.min(cur,e)),height:h,rx:4,fill:C.opd});
+        if(cur>e) s+=el('rect',{x:X0+W*e,y,width:W*(cur-e),height:h,fill:'url(#hatch)'});
+        if(front>=M && e>M) s+=el('rect',{x:X0+W*M,y,width:W*(e-M),height:h,fill:'#fed7aa'});
+        if(front>=M) s+=el('rect',{x:X0+W*e-1.5,y:y-3,width:3,height:h+6,fill:C.ok});
+      }
+    });
+    if(mode==='shared'){ const x=X0+W*M; s+=el('line',{x1:x,x2:x,y1:Y0-6,y2:Y0+E.length*RH,stroke:C.flash2,'stroke-width':2,'stroke-dasharray':'5 4'});
+      s+=el('text',{x,y:Y0+E.length*RH+14,'text-anchor':'middle','font-size':11,fill:C.flash2,'font-weight':700},T('shared horizon M (fixed before sampling)','共享 horizon M（采样前就已固定）')); }
+    else s+=el('text',{x:X0,y:Y0+E.length*RH+14,'font-size':11,fill:'#16a34a','font-weight':600},T('○ verification points: each rollout checks its own count and stops at E','○ 验证点：每条 rollout 检查自己的计数，并在 E 处停止'));
+    const done=prog>=1, cut=mode==='shared'?E.filter(e=>e>M).length:0, over=mode==='shared'?E.filter(e=>e<M-0.05).length:0;
+    $('#hcCut').textContent=(done?cut:'–')+' / '+E.length; $('#hcOver').textContent=(done?over:'–')+' / '+E.length;
+    svg.innerHTML='<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#d6d3d1"/><rect width="2.5" height="6" fill="#a8a29e"/></pattern></defs>'+s;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+/* ======================= PROBLEM widget ======================= */
+(function(){
+  const E=[720,410,300,150,560,880], N=1000; let mode='shared';
+  const rows=$('#pRows'); rows.innerHTML=E.map((e,i)=>`<div class="ro"><span>rollout ${String.fromCharCode(97+i)}</span><div class="track"><div class="seg1"></div><div class="seg2"></div><div class="seg3"></div><div class="bd" style="left:calc(${e/N*100}% - 1.5px)"></div></div></div>`).join('')+'<div class="hline" id="hl" style="left:0"><b>M</b></div>';
+  function upd(){
+    const M=+$('#mRange').value; $('#mVal').textContent=M; let lost=0,waste=0;
+    $$('#pRows .track').forEach((t,i)=>{
+      const e=E[i], s1=t.querySelector('.seg1'), s2=t.querySelector('.seg2'), s3=t.querySelector('.seg3');
+      if(mode==='shared'){
+        const a=Math.min(M,e); s1.style.width=a/N*100+'%';
+        if(M<e){ s2.style.left=M/N*100+'%'; s2.style.width=(e-M)/N*100+'%'; s3.style.width='0'; lost+=e-M; }
+        else { s2.style.width='0'; s3.style.left=e/N*100+'%'; s3.style.width=(M-e)/N*100+'%'; waste+=M-e; }
+      }else{
+        const ov=Math.round(e*0.05); s1.style.width=e/N*100+'%'; s2.style.width='0'; s3.style.left=e/N*100+'%'; s3.style.width=ov/N*100+'%'; waste+=ov;
+      }
+    });
+    const hl=$('#hl'); const tr=$('#pRows .track'); const off=tr.offsetLeft;
+    hl.style.display=mode==='shared'?'block':'none'; hl.style.left=(off+tr.clientWidth*M/N)+'px';
+    $('#pLost').textContent=fmt(lost); $('#pWaste').textContent=fmt(waste);
+    $('#mSl').style.opacity=mode==='shared'?1:.35; $('#mRange').disabled=mode!=='shared';
+    $('#pHint').innerHTML=mode==='shared'
+      ? (lost>0&&waste>0?T('No single M avoids both kinds of error, because the boundaries differ by up to 5.9× within one prompt.','没有任何一个 M 能同时避免两类错误：同一 prompt 内的边界最多相差 5.9×。')
+         :lost>0?T('A short horizon starves long reliable rollouts of supervision.','horizon 太短，可靠长度较长的 rollout 就拿不到足够的监督。')
+         :T('A long horizon pays to decode tokens that teacher supervision no longer helps.','horizon 太长，要为教师监督已经帮不上忙的 token 付出解码成本。'))
+      : T('Each rollout retires at its own boundary. Nothing is cut early, and the only waste is the small overshoot inside the last verified block (illustrated as 5%).','每条 rollout 都在自己的边界停止：没有任何提前截断，唯一的浪费是最后一个验证块里的少量 overshoot（示意为 5%）。');
+  }
+  $('#mRange').oninput=upd; window.addEventListener('resize',upd);
+  $$('#pMode button').forEach(b=>b.onclick=()=>{$$('#pMode button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=b.dataset.m;upd();});
+  RENDER.push(upd);
+  const W=[['OPD 12288',11704,'#6b7280'],['TOPD 4096',3512,C.topd],['Prune-OPD',3139,C.prune],['Flash-OPD',26,C.flash]];
+  $('#wasteBars').innerHTML=W.map(([n,v,c])=>`<div class="bar"><span>${n}</span><div><div class="b" style="width:${Math.max(.6,v/11704*100)}%;background:${c}"></div></div><span class="v" style="color:${c}">${fmt(v)}</span></div>`).join('');
+})();
+
+/* ======================= PLAYGROUND ======================= */
+(function(){
+  let mode='paper', cfg, phi, run, shown=0, timer=null, seed=7;
+  const PAPER={B:200,k0:128,rho:0.7,W:128,kmin:16,Lmax:4096};
+  const SIMDEF={B:200,k0:128,rho:0.7,W:128,kmin:16,Lnat:6000,base:0.12,drift:0.35,onset:500};
+  let sim={...SIMDEF};
+  const SL=[
+    {h:['Controller','控制器']},
+    {k:'B',l:['allowance B','容忍预算 B'],mn:20,mx:600,st:10,hp:['events tolerated before the boundary','边界之前可容忍的事件数']},
+    {k:'k0',l:['initial checkpoint k₀','初始检查点 k₀'],mn:16,mx:1024,st:16,hp:['first verification position','第一次验证的位置']},
+    {k:'rho',l:['step discount ρ','步长折扣 ρ'],mn:0.2,mx:1,st:0.05,hp:['fraction of the estimated distance to jump','每次跳过估计剩余距离的比例']},
+    {k:'W',l:['trailing window W','滑动窗口 W'],mn:16,mx:1024,st:16,hp:['positions used to estimate λ̂','估计 λ̂ 所用的位置数']},
+    {k:'kmin',l:['minimum advance k_min','最小推进 k_min'],mn:4,mx:256,st:4,hp:['guarantees progress near the boundary','保证靠近边界时仍能前进']},
+    {h:['Trajectory (synthetic)','轨迹（合成）']},
+    {k:'onset',l:['drift onset','漂移起点'],mn:100,mx:6000,st:50,hp:['where the student drifts away from the teacher','学生开始偏离教师的位置']},
+    {k:'base',l:['event rate before drift','漂移前事件率'],mn:0,mx:0.3,st:0.01,hp:['P(φ=1) on a compatible prefix','兼容前缀上的 P(φ=1)']},
+    {k:'drift',l:['event rate after drift','漂移后事件率'],mn:0.05,mx:0.9,st:0.01,hp:['P(φ=1) once compatibility collapses','兼容性崩塌后的 P(φ=1)']},
+    {k:'Lnat',l:['natural length (EOS)','自然长度（EOS）'],mn:200,mx:8192,st:50,hp:['where the sampler would emit EOS','采样器自然输出 EOS 的位置']},
+  ];
+  const lt=a=>T(a[0],a[1]);
+  function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  function paperTraj(){const L=4096,p=new Uint8Array(L);
+    const seg=[[1,128,20],[129,807,115],[808,847,14],[848,935,31],[936,975,14],[976,983,6],[984,991,3]];
+    for(const [a,b,n] of seg){const len=b-a+1;for(let i=0;i<n;i++){const pos=a-1+Math.ceil((i+1)*len/n);p[pos-1]=1;}}
+    const r=rng(3);for(let q=992;q<=L;q++) if(r()<0.35)p[q-1]=1; return p;}
+  function simTraj(){const r=rng(seed),L=sim.Lnat,p=new Uint8Array(L);
+    for(let t=1;t<=L;t++){const s=1/(1+Math.exp(-(t-sim.onset)/300));const pr=sim.base+(sim.drift-sim.base)*s;p[t-1]=r()<pr?1:0;}return p;}
+  function runFlash(phi,c){
+    const Ln=phi.length, cs=new Int32Array(Ln+1); for(let i=0;i<Ln;i++)cs[i+1]=cs[i]+phi[i];
+    let v=0,cnt=0,k=Math.min(c.k0,c.Lmax); const rounds=[]; let Ehat=null,reason=null;
+    while(true){
+      const delta=k-v, m=Math.min(delta,Ln-v), v0=v, c0=cnt; let s=null;
+      for(let j=1;j<=m;j++){cnt+=phi[v+j-1]; if(cnt>=c.B&&s===null)s=v+j;}
+      v+=m; const r={from:v0,to:v,newEv:cnt-c0,c:cnt};
+      if(s!==null){Ehat=s;reason='allowance';r.dec='stop';rounds.push(r);break;}
+      if(m<delta){Ehat=v;reason='eos';r.dec='eos';rounds.push(r);break;}
+      if(v>=c.Lmax){Ehat=v;reason='context';r.dec='ctx';rounds.push(r);break;}
+      const Wp=Math.min(c.W,v), lam=(cs[v]-cs[v-Wp])/Wp, rem=c.B-cnt;
+      const a=lam===0?c.Lmax:Math.ceil(c.rho*rem/lam-1e-9); const nk=Math.min(v+Math.max(c.kmin,a),c.Lmax);
+      Object.assign(r,{lam,rem,next:nk,dec:'go'}); rounds.push(r); k=nk;
+    }
+    let E=null; for(let t=1;t<=Ln;t++) if(cs[t]>=c.B){E=t;break;}
+    return {rounds,Ehat,reason,E,cs,Ln};
+  }
+  function updVals(){ for(const k in sim){const e=$('#v_'+k); if(e) e.textContent=(k==='rho'||k==='base'||k==='drift')?(+sim[k]).toFixed(2):fmt(sim[k]);} }
+  function buildCtrls(){
+    const box=$('#ctrlBox');
+    if(mode==='paper'){
+      box.innerHTML=`<h4>${T('Fixed configuration (Fig. 3)','固定配置（Fig. 3）')}</h4>
+      <div class="mono" style="font-size:13px;line-height:1.9;color:var(--ink2)">B = 200 &nbsp; k₀ = 128<br>ρ = 0.7 &nbsp; W = 128 &nbsp; k_min = 16</div>
+      <p class="note" style="margin:10px 0 0">${T('The event counts per block match Figure 3: 20 / 160 / 14 / crossing. Positions inside each block are placed evenly, so λ̂ = 20/128 = 0.156 and 45/128 ≈ 0.35, exactly as in the paper.','每个块的事件数与 Figure 3 一致：20 / 160 / 14 / 越界。块内事件均匀摆放，因此 λ̂ = 20/128 = 0.156 与 45/128 ≈ 0.35，和论文完全相同。')}</p>
+      <h4>${T('What to look for','看点')}</h4>
+      <p class="note" style="margin:0;font-size:12.5px;line-height:1.6">${T('1. Far from the boundary the rate is low, so one jump covers 807 tokens.<br>2. Close to it, steps shrink to 40 and then to k_min = 16.<br>3. The crossing is located <i>inside</i> the last block. Tokens 984–991 are decoded but dropped (8-token overshoot).<br>4. The orange dashed line is the λ̂ extrapolation. The next k sits at fraction ρ of the way to where it meets B.','1. 离边界远时事件率低，一次跳跃就覆盖 807 个 token。<br>2. 接近边界时，步长缩到 40，再缩到 k_min = 16。<br>3. 越界点在最后一个块<i>内部</i>被精确定位，984–991 号 token 解码后被丢弃（8 个 token 的 overshoot）。<br>4. 橙色虚线是 λ̂ 外推，下一个 k 落在“到它与 B 交点距离”的 ρ 处。')}</p>`;
+      $('#bSeed').style.display='none';
+    }else{
+      let h=''; for(const s of SL){ if(s.h){h+=`<h4>${lt(s.h)}</h4>`;continue;}
+        h+=`<div class="sl"><label><span>${lt(s.l)}</span><span class="v" id="v_${s.k}"></span></label><input type="range" data-k="${s.k}" min="${s.mn}" max="${s.mx}" step="${s.st}" value="${sim[s.k]}"><small>${lt(s.hp)}</small></div>`; }
+      h+=`<button class="btn ghost" id="bDef" style="padding:6px 12px;font-size:12.5px">${T('Reset defaults','恢复默认')}</button><p class="note" style="margin:8px 0 0">${T("L_max = 8192. Defaults use the Fig. 3 controller (ρ = 0.7); the paper's main runs use ρ = 1.0. Compare ρ = 1.0 with ρ = 0.5 to see the rounds-vs-overshoot trade-off from Fig. 8(b). Ê ≥ E holds in every case.",'L_max = 8192。默认采用 Fig. 3 的控制器（ρ = 0.7），论文主实验用的是 ρ = 1.0。对比 ρ = 1.0 与 ρ = 0.5，可以看到 Fig. 8(b) 中验证轮数与 overshoot 的权衡；无论怎么调，Ê ≥ E 始终成立。')}</p>`;
+      box.innerHTML=h; $('#bSeed').style.display='';
+      $$('#ctrlBox input[type=range]').forEach(inp=>inp.oninput=()=>{sim[inp.dataset.k]=+inp.value; compute(true);});
+      $('#bDef').onclick=()=>{sim={...SIMDEF}; buildCtrls(); compute(true);};
+      updVals();
+    }
+  }
+  function compute(showAll){
+    stop();
+    if(mode==='paper'){cfg=PAPER; phi=paperTraj();}
+    else{cfg={B:sim.B,k0:sim.k0,rho:sim.rho,W:sim.W,kmin:sim.kmin,Lmax:8192}; phi=simTraj(); updVals();}
+    run=runFlash(phi,cfg); shown=showAll?run.rounds.length:0; draw();
+  }
+  function playLabel(){ $('#bPlayT').textContent=timer?T('Pause','暂停'):T('Play','播放'); }
+  function stop(){ if(timer){clearInterval(timer);timer=null;} playLabel(); }
+  function play(){ if(timer){stop();return;} if(shown>=run.rounds.length) shown=0;
+    timer=setInterval(()=>{ if(shown>=run.rounds.length){stop();return;} shown++; draw(); },1000); playLabel(); draw(); }
+  function toSub(i){return String(i).split('').map(d=>'₀₁₂₃₄₅₆₇₈₉'[+d]).join('');}
+  function draw(){
+    const cv=$('#cv'), dpr=window.devicePixelRatio||1, Wc=cv.clientWidth, Hc=300; cv.width=Wc*dpr; cv.height=Hc*dpr; cv.style.height=Hc+'px';
+    const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,Wc,Hc);
+    const FONT='-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",Helvetica,Arial';
+    const last=run.rounds[run.rounds.length-1];
+    const Ldisp = mode==='paper'?1100:Math.min(run.Ln,Math.max(800,Math.ceil(last.to*1.25)));
+    const L=46,R=Wc-14, X=p=>L+(R-L)*Math.min(p,Ldisp)/Ldisp;
+    const rs=run.rounds.slice(0,shown); const v=rs.length?rs[rs.length-1].to:0; const prevV=rs.length>1?rs[rs.length-2].to:0;
+    const done=shown===run.rounds.length;
+    // ---- token strip ----
+    const ty=50, th=34;
+    g.font='11px '+FONT; g.fillStyle='#6b7280'; g.textAlign='left'; g.fillText('tokens',4,ty+21);
+    g.save(); g.beginPath(); g.rect(X(0),ty,R-X(0),th); g.clip(); g.fillStyle='#f4f3ef'; g.fillRect(X(0),ty,R-X(0),th);
+    g.strokeStyle='#e4e2dc'; g.lineWidth=1; for(let x=X(0)-th;x<R;x+=7){g.beginPath();g.moveTo(x,ty+th);g.lineTo(x+th,ty);g.stroke();} g.restore();
+    if(v>0){
+      const keep=done&&run.Ehat!==null?run.Ehat:v;
+      g.fillStyle='#93c5fd'; g.fillRect(X(0),ty,X(Math.min(prevV,keep))-X(0),th);
+      g.fillStyle='#fdba74'; g.fillRect(X(prevV),ty,Math.max(0,X(Math.min(v,keep))-X(prevV)),th);
+      if(done && run.Ehat<v){ g.fillStyle='#d6d3d1'; g.fillRect(X(run.Ehat),ty,X(v)-X(run.Ehat),th); }
+      g.fillStyle='#991b1b';
+      for(let t=1;t<=Math.min(v,Ldisp);t++) if(phi[t-1]){ g.fillRect(X(t)-0.5,ty+th-9,1,9); }
+    }
+    if(v>Ldisp){ g.fillStyle='#6b7280'; g.textAlign='right'; g.fillText(T('→ continues to ','→ 延续到 ')+fmt(v),R,ty-6); }
+    // checkpoints
+    g.setLineDash([4,3]); g.lineWidth=1.5;
+    let prevLX=-1e9, lift=0;
+    rs.forEach((r,i)=>{ const x=X(r.to); if(r.to>Ldisp) return; g.strokeStyle='#16a34a'; g.beginPath(); g.moveTo(x,ty-4); g.lineTo(x,Hc-30); g.stroke();
+      lift = (x-prevLX<58) ? (lift+12)%36 : 0; prevLX=x;
+      g.fillStyle='#15803d'; g.textAlign='center'; g.font='600 11px '+FONT; g.fillText('k'+toSub(i)+'='+r.to, x, ty-7-lift); });
+    g.setLineDash([]);
+    // ---- count chart ----
+    const cy0=ty+th+26, cy1=Hc-30; const Bv=cfg.B; const cmax=Math.max(Bv*1.15, 10);
+    const Y=c=>cy1-(cy1-cy0)*Math.min(c,cmax)/cmax;
+    g.strokeStyle='#e7e5e4'; g.lineWidth=1; g.beginPath(); g.moveTo(X(0),cy1); g.lineTo(R,cy1); g.stroke();
+    g.fillStyle='#6b7280'; g.textAlign='right'; g.font='11px '+FONT; g.fillText('0',L-6,cy1+4); g.fillText(T('count c','计数 c'),L-6,cy0+4);
+    g.strokeStyle='#dc2626'; g.setLineDash([2,3]); g.beginPath(); g.moveTo(X(0),Y(Bv)); g.lineTo(R,Y(Bv)); g.stroke(); g.setLineDash([]);
+    g.fillStyle='#dc2626'; g.textAlign='right'; g.fillText('B='+Bv,L-6,Y(Bv)+4);
+    if(v>0){ g.strokeStyle='#1d4ed8'; g.lineWidth=2; g.beginPath(); const vv=Math.min(v,Ldisp);
+      for(let t=0;t<=vv;t+=Math.max(1,Math.floor(vv/600))){ const x=X(t), y=Y(run.cs[t]); t===0?g.moveTo(x,y):g.lineTo(x,y);} g.lineTo(X(vv),Y(run.cs[vv])); g.stroke(); }
+    if(rs.length && rs[rs.length-1].dec==='go'){
+      const r=rs[rs.length-1]; const hit=r.to+r.rem/r.lam; g.strokeStyle='#f97316'; g.setLineDash([5,4]); g.lineWidth=1.6;
+      g.beginPath(); g.moveTo(X(r.to),Y(r.c)); g.lineTo(X(Math.min(hit,Ldisp)),Y(r.c+r.lam*(Math.min(hit,Ldisp)-r.to))); g.stroke(); g.setLineDash([]);
+      if(hit<=Ldisp){ g.fillStyle='#f97316'; g.beginPath(); g.arc(X(hit),Y(Bv),3.5,0,7); g.fill(); g.textAlign='center'; g.font='11px '+FONT; g.fillText(T('λ̂ hits B','λ̂ 外推触及 B'),X(hit),Y(Bv)-8); }
+      if(r.next<=Ldisp){ g.fillStyle='#15803d'; g.beginPath(); g.arc(X(r.next),Y(r.c+r.lam*(r.next-r.to)),3.5,0,7); g.fill(); }
+    }
+    if(done && run.Ehat!==null && run.Ehat<=Ldisp){ const x=X(run.Ehat); g.strokeStyle='#dc2626'; g.setLineDash([5,3]); g.lineWidth=2; g.beginPath(); g.moveTo(x,ty-2); g.lineTo(x,cy1); g.stroke(); g.setLineDash([]);
+      g.fillStyle='#dc2626'; g.font='700 12px '+FONT; const rt=x>R-90; g.textAlign=rt?'right':'left'; g.fillText('Ê='+run.Ehat+(run.reason==='eos'?' (EOS)':run.reason==='context'?' (L_max)':''),x+(rt?-6:6),cy1-6); }
+    g.fillStyle='#6b7280'; g.font='11px '+FONT; g.textAlign='center';
+    const tk=niceMax(Ldisp/5); for(let p=0;p<=Ldisp;p+=tk){ g.fillText(fmt(p),X(p),Hc-12); }
+    g.textAlign='right'; g.fillText(T('position τ','位置 τ'),R,Hc-1);
+    // ----- metrics, log, guarantee -----
+    $('#roundLbl').textContent=T(`round ${shown} / ${run.rounds.length}`,`第 ${shown} / ${run.rounds.length} 轮`);
+    const full=Math.min(run.Ln,cfg.Lmax), D=rs.reduce((s,r)=>s+(r.to-r.from),0), P=rs.reduce((s,r)=>s+r.to,0);
+    const mets=[
+      [fmt(shown),T('verification rounds R','验证轮数 R')],
+      [done?fmt(run.Ehat):'…',T('retained length Ê','保留长度 Ê')],
+      [run.E===null?'—':fmt(run.E),T('exact boundary E (ground truth)','精确边界 E（真值）')],
+      [done?fmt(D-run.Ehat):'…',T('overshoot (decoded, dropped)','overshoot（解码后丢弃）')],
+      [fmt(D)+' / '+fmt(full),T('decoded vs. full rollout','已解码 / 完整 rollout')],
+      [done&&run.Ehat?(P/run.Ehat).toFixed(2)+'×':'…',T('verified prefix / Ê','累计验证前缀 / Ê')],
+    ];
+    $('#mets').innerHTML=mets.map(([n,l],i)=>`<div><div class="n" style="${i===1&&done?'color:var(--flash)':''}">${n}</div><div class="l">${l}</div></div>`).join('');
+    let lh=''; rs.forEach((r,i)=>{
+      let dec='';
+      if(r.dec==='go') dec=`<span class="badge go">${T('advance','推进')}</span> <span class="f">k${toSub(i+1)} = ${r.to} + max(${cfg.kmin}, ⌈${cfg.rho} × ${r.rem} / ${r.lam.toFixed(3)}⌉) = <b>${r.next}</b></span>`;
+      else if(r.dec==='stop') dec=`<span class="badge stop">${T('stop','停止')}</span> ${T('c crosses B inside block','c 在块内越过 B')} → <b>Ê = ${run.Ehat}</b>`;
+      else if(r.dec==='eos') dec=`<span class="badge eos">EOS</span> ${T('sampler finished','采样结束')}, Ê = ${run.Ehat}`;
+      else dec=`<span class="badge stop">L_max</span> ${T('context limit','达到上下文上限')}, Ê = ${run.Ehat}`;
+      lh+=`<tr class="${i===rs.length-1?'cur':''}"><td>${i+1}</td><td>${r.from} → ${r.to}</td><td>+${r.newEv}</td><td>${r.c}${r.c>=cfg.B?' ≥ B':''}</td><td>${r.lam!==undefined?r.lam.toFixed(3):'—'}</td><td>${dec}</td></tr>`;
+    });
+    $('#logBody').innerHTML=lh||`<tr><td colspan="6" class="note" style="padding:12px 8px">${T('Press <b>Play</b> or <b>Next round</b> to start decoding from k₀.','点击<b>播放</b>或<b>下一轮</b>，从 k₀ 开始解码。')}</td></tr>`;
+    const gu=$('#guar'), lab=`<div class="lab">${T('Proposition 1 check','Proposition 1 校验')}</div>`;
+    if(!done){ gu.className='guar'; gu.innerHTML=lab+T('Run to the last round to check Ê ≥ E on this trajectory.','运行到最后一轮，即可在这条轨迹上校验 Ê ≥ E。'); }
+    else if(run.E===null){ gu.className='guar ok'; gu.innerHTML=lab+`<div class="big">c &lt; B ✓</div>`+T(`The count never reaches B, so the whole rollout is reliable. It ends at ${run.reason==='eos'?'EOS':'L_max'} (Ê = ${fmt(run.Ehat)}).`,`计数始终没有达到 B，整条 rollout 都可靠，于 ${run.reason==='eos'?'EOS':'L_max'} 处结束（Ê = ${fmt(run.Ehat)}）。`); }
+    else { gu.className='guar ok'; gu.innerHTML=lab+`<div class="big">Ê = ${fmt(run.Ehat)} ≥ E = ${fmt(run.E)} ✓</div>`+T('Stopping never precedes the boundary. The rate estimate only changed where we looked.','停止点从不早于边界；事件率估计只改变了“在哪里检查”。'); }
+  }
+  $$('#pgMode button').forEach(b=>b.onclick=()=>{$$('#pgMode button').forEach(x=>x.classList.remove('on'));b.classList.add('on');mode=b.dataset.m;buildCtrls();compute(mode==='sim');});
+  $('#bPlay').onclick=play; $('#bStep').onclick=()=>{stop(); if(shown<run.rounds.length){shown++;draw();}};
+  $('#bReset').onclick=()=>{stop();shown=0;draw();}; $('#bSeed').onclick=()=>{seed=(seed*16807)%2147483647; compute(true);};
+  window.addEventListener('resize',()=>draw());
+  cfg=PAPER; phi=paperTraj(); run=runFlash(phi,cfg);
+  RENDER.push(()=>{ buildCtrls(); playLabel(); draw(); });
+})();
+
+/* ======================= RESULTS ======================= */
+const BENCH=['AMC23','AIME24','AIME25','HMMT24','HMMT25','Avg.'];
+const T2=[
+ {id:'G1',s:'DeepSeek-R1-Distill-Qwen-1.5B',t:'JustRL-DeepSeek-1.5B',short:'R1-1.5B ← JustRL-1.5B',rows:{
+  'OPD':[[78.16,46.46,32.92,24.79,18.12,40.09],7.46,null],'TOPD':[[79.67,45.83,33.33,24.79,19.38,40.60],3.51,2.12],
+  'Prune-OPD':[[78.92,44.79,31.25,22.92,20.62,39.70],3.36,2.22],'Flash-OPD':[[79.37,46.46,32.92,22.29,20.83,40.37],3.35,2.23]}},
+ {id:'G2',s:'DeepSeek-R1-Distill-Qwen-1.5B',t:'DeepSeek-R1-Distill-Qwen-7B',short:'R1-1.5B ← R1-7B',rows:{
+  'OPD':[[64.91,33.33,22.92,15.83,14.79,30.36],10.95,null],'TOPD':[[64.91,32.71,23.75,16.25,15.00,30.52],4.15,2.64],
+  'Prune-OPD':[[65.36,30.83,24.38,13.75,15.42,29.95],3.81,2.88],'Flash-OPD':[[66.27,30.42,24.17,13.33,14.58,29.75],2.06,5.32]}},
+ {id:'G3',s:'Qwen3-1.7B-Base',t:'Qwen3-4B (Non-thinking)',short:'Qwen3-1.7B-Base ← Qwen3-4B',rows:{
+  'OPD':[[27.94,8.12,3.33,3.33,0.21,8.59],11.06,null],'TOPD':[[28.35,7.85,3.13,2.15,0.28,8.35],4.80,2.30],
+  'Prune-OPD':[[28.43,6.74,3.89,2.36,0.49,8.38],3.04,3.64],'Flash-OPD':[[29.29,6.46,5.00,3.33,0.42,8.90],1.55,7.14]}},
+ {id:'G4',s:'Qwen3-4B-Base',t:'Qwen3-4B (Non-thinking)',short:'Qwen3-4B-Base ← Qwen3-4B',rows:{
+  'OPD':[[43.00,14.58,12.50,6.25,2.92,15.85],33.09,null],'TOPD':[[42.09,15.00,12.50,5.21,3.12,15.58],7.81,4.24],
+  'Prune-OPD':[[40.06,15.42,10.83,4.79,2.71,14.76],13.87,2.39],'Flash-OPD':[[48.72,18.75,15.83,7.08,5.62,19.20],4.40,7.52]}},
+];
+const METH=['OPD','TOPD','Prune-OPD','Flash-OPD'];
+legend('#mleg1',METH.map(m=>[m,MC[m]])); legend('#mleg2',METH.slice(1).map(m=>[m,MC[m]]));
+let curPair=3;
+$('#pairTabs').innerHTML=T2.map((p,i)=>`<button data-i="${i}" class="${i===3?'on':''}"><b>${p.id}</b> · ${p.short}<small>${p.s} / ${p.t}</small></button>`).join('');
+$$('#pairTabs button').forEach(b=>b.onclick=()=>{$$('#pairTabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');curPair=+b.dataset.i;drawPair(curPair);});
+function drawPair(i){
+  const p=T2[i]; const Wd=560,Hd=290,m={l:40,r:10,t:18,b:34};
+  const mx=niceMax(Math.max(...METH.map(k=>Math.max(...p.rows[k][0])))*1.08);
+  const gw=(Wd-m.l-m.r)/BENCH.length, bw=gw*0.78/4; let s='';
+  for(let j=0;j<=4;j++){const v=mx*j/4,y=m.t+(Hd-m.t-m.b)*(1-j/4); s+=el('line',{x1:m.l,x2:Wd-m.r,y1:y,y2:y,stroke:C.grid}); s+=el('text',{x:m.l-6,y:y+4,'text-anchor':'end','font-size':11,fill:C.muted},fmt(v,v<10&&v%1?1:0));}
+  BENCH.forEach((b,j)=>{
+    const gx=m.l+gw*j+gw*0.11; if(j===5) s+=el('rect',{x:m.l+gw*j+2,y:m.t-6,width:gw-4,height:Hd-m.t-m.b+6,fill:'#fbf7f2',rx:6});
+    METH.forEach((k,q)=>{const v=p.rows[k][0][j],h=(Hd-m.t-m.b)*v/mx,x=gx+q*bw,y=Hd-m.b-h;
+      s+=el('rect',{x,y,width:bw-2,height:Math.max(h,0.5),rx:2,fill:MC[k],opacity:k==='Flash-OPD'?1:.85},`<title>${k} · ${b}: ${v.toFixed(2)}</title>`);
+      if(k==='Flash-OPD') s+=el('text',{x:x+bw/2-1,y:y-4,'text-anchor':'middle','font-size':10,fill:C.flash,'font-weight':700},v.toFixed(1));});
+    s+=el('text',{x:m.l+gw*j+gw/2,y:Hd-m.b+18,'text-anchor':'middle','font-size':12,fill:j===5?C.ink:C.muted,'font-weight':j===5?700:400},j===5?T('Avg.','平均'):b);
+  });
+  $('#accSvg').innerHTML=s;
+  const tm=Math.max(...METH.map(k=>p.rows[k][1])); let t=''; const bh=44, L=96, Rr=430;
+  METH.forEach((k,q)=>{const r=p.rows[k],y=26+q*62,w=(Rr-L)*r[1]/tm;
+    t+=el('text',{x:L-10,y:y+bh/2+5,'text-anchor':'end','font-size':13,fill:k==='Flash-OPD'?C.flash:C.ink,'font-weight':k==='Flash-OPD'?800:500},k);
+    t+=el('rect',{x:L,y,width:Rr-L,height:bh,rx:6,fill:'#f4f3ef'});
+    t+=el('rect',{x:L,y,width:Math.max(w,2),height:bh,rx:6,fill:MC[k]});
+    t+=el('text',{x:L+w+8,y:y+bh/2+5,'font-size':13,fill:C.ink,'font-weight':700},r[1].toFixed(2)+' h');
+    t+=el('text',{x:Wd-6,y:y+bh/2+5,'text-anchor':'end','font-size':15,fill:k==='Flash-OPD'?C.flash:C.muted,'font-weight':800},r[2]?r[2].toFixed(2)+'×':'1.00×');
+  });
+  t+=el('text',{x:Wd-6,y:14,'text-anchor':'end','font-size':11,fill:C.muted},T('speedup','加速比'));
+  $('#timeSvg').innerHTML=t;
+  const f=p.rows['Flash-OPD'],o=p.rows['OPD']; const d=f[0][5]-o[0][5]; const dc=`<b style="color:${d>=0?C.ok:C.flash}">${d>=0?'+':''}${d.toFixed(2)}</b>`;
+  $('#pairNote').innerHTML=T(`Flash-OPD: <b>${f[2].toFixed(2)}×</b> faster than OPD, average accuracy ${dc} points (${f[0][5].toFixed(2)} vs ${o[0][5].toFixed(2)}).`,
+                             `Flash-OPD 比 OPD 快 <b>${f[2].toFixed(2)}×</b>，平均准确率 ${dc} 分（${f[0][5].toFixed(2)} vs ${o[0][5].toFixed(2)}）。`);
+}
+function drawScatter(){
+  const Wd=520,Hd=330,m={l:50,r:16,t:16,b:42}, x0=1,x1=8,y0=-1.5,y1=3.75;
+  const X=v=>m.l+(Wd-m.l-m.r)*(v-x0)/(x1-x0), Y=v=>m.t+(Hd-m.t-m.b)*(1-(v-y0)/(y1-y0)); let s='';
+  s+=el('rect',{x:X(1),y:Y(y1),width:X(x1)-X(1),height:Y(0)-Y(y1),fill:'#f0fdf4'});
+  s+=el('text',{x:X(1)+8,y:Y(y1)+16,'text-anchor':'start','font-size':11,fill:C.ok,'font-weight':600},T('↗ faster and more accurate','↗ 更快且更准'));
+  for(let v=1;v<=8;v++){s+=el('line',{x1:X(v),x2:X(v),y1:m.t,y2:Hd-m.b,stroke:C.grid});s+=el('text',{x:X(v),y:Hd-m.b+16,'text-anchor':'middle','font-size':11,fill:C.muted},v+'×');}
+  for(let v=-1;v<=3;v++){s+=el('line',{x1:m.l,x2:Wd-m.r,y1:Y(v),y2:Y(v),stroke:v===0?'#a8a29e':C.grid,'stroke-width':v===0?1.3:1});s+=el('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end','font-size':11,fill:C.muted},(v>0?'+':'')+v);}
+  s+=el('text',{x:(m.l+Wd-m.r)/2,y:Hd-6,'text-anchor':'middle','font-size':12,fill:C.ink2},T('speedup over vanilla OPD','相对 vanilla OPD 的加速比'));
+  s+=el('text',{x:14,y:(m.t+Hd-m.b)/2,'text-anchor':'middle','font-size':12,fill:C.ink2,transform:`rotate(-90 14 ${(m.t+Hd-m.b)/2})`},T('Δ avg. accuracy vs OPD (pts)','相对 OPD 的平均准确率变化（分）'));
+  T2.forEach(p=>{const o=p.rows['OPD'][0][5]; ['TOPD','Prune-OPD','Flash-OPD'].forEach(k=>{const r=p.rows[k],dx=r[2],dy=r[0][5]-o;const f=k==='Flash-OPD';
+    s+=el('circle',{cx:X(dx),cy:Y(dy),r:f?9:6.5,fill:MC[k],opacity:f?1:.85,stroke:'#fff','stroke-width':1.5},`<title>${k} · ${p.short}: ${dx.toFixed(2)}×, ${dy>=0?'+':''}${dy.toFixed(2)}</title>`);
+    s+=el('text',{x:X(dx)+(f?12:-9),y:Y(dy)+4,'text-anchor':f?'start':'end','font-size':f?11.5:10.5,fill:f?C.flash:C.muted,'font-weight':f?800:500},p.id);});});
+  $('#scSvg').innerHTML=s;
+}
+function drawT2(){
+  let h=`<thead><tr><th>${T('Method','方法')}</th>`+BENCH.map(b=>`<th>${b==='Avg.'?T('Average','平均'):b}</th>`).join('')+`<th>${T('Time','时间')}</th><th>${T('Speedup','加速比')}</th></tr></thead><tbody>`;
+  T2.forEach(p=>{ h+=`<tr class="g"><td colspan="9">${p.id} · ${T('Student / Teacher','学生 / 教师')}: ${p.s} / ${p.t}</td></tr>`;
+    const best=BENCH.map((_,j)=>Math.max(...METH.map(k=>p.rows[k][0][j]))), bt=Math.min(...METH.map(k=>p.rows[k][1]));
+    METH.forEach(k=>{const r=p.rows[k]; h+=`<tr class="${k==='Flash-OPD'?'o':''}"><td>${k}</td>`+r[0].map((v,j)=>`<td class="${v===best[j]?'best':''}">${v.toFixed(2)}</td>`).join('')+`<td class="${r[1]===bt?'best':''}">${r[1].toFixed(2)}h</td><td class="${k==='Flash-OPD'?'best':''}">${r[2]?r[2].toFixed(2)+'×':'–'}</td></tr>`;});});
+  $('#t2').innerHTML=h+'</tbody>';
+}
+RENDER.push(()=>{drawPair(curPair); drawScatter(); drawT2();});
+
+/* ======================= EFFICIENCY ======================= */
+RENDER.push(function(){
+  const STAGES=[['Rollout','Rollout','#3f6ea6'],['Teacher / Verify','教师 / 验证','#5fb8c9'],['Log-prob','Log-prob','#7aa9dc'],['Update','参数更新','#6cc79a'],['Other','其他','#c9e9d8']];
+  legend('#stageLeg',STAGES.map(s=>[T(s[0],s[1]),s[2]]));
+  const D=[ ['G1','R1-1.5B ← JustRL-1.5B',[70.3,11.2,10.5,31.5],132.3,[26.2,14.2,0,14.7],60.0,'2.20×'],
+            ['G2','R1-1.5B ← R1-7B',[88.8,40.4,13.3,42.4],194.3,[14.4,12.2,0,4.3],36.5,'5.32×'],
+            ['G3','Qwen3-1.7B-B ← Qwen3-4B',[109.7,25.8,12.6,41.1],196.1,[11.1,10.1,0,2.7],27.5,'7.13×'],
+            ['G4','Qwen3-4B-B ← Qwen3-4B',[306.8,47.8,45.6,175.7],586.9,[44.2,19.7,0,8.5],78.1,'7.52×'] ];
+  const Wd=560,L=84,R=488; let s=''; let y=10;
+  D.forEach(([id,name,o,os,f,fs,sp])=>{
+    s+=el('text',{x:0,y:y+10,'font-size':12.5,'font-weight':700,fill:C.ink},id+' · '+name);
+    s+=el('text',{x:Wd,y:y+10,'text-anchor':'end','font-size':13,'font-weight':800,fill:C.flash},T(sp+' per step','每步 '+sp));
+    [['OPD',o,os],['Flash',f,fs]].forEach(([lab,parts,tot],q)=>{
+      const yy=y+18+q*26, sc=(R-L)/os; let x=L; const all=[...parts,Math.max(0,tot-parts.reduce((a,b)=>a+b,0))];
+      s+=el('text',{x:L-8,y:yy+14,'text-anchor':'end','font-size':12,fill:lab==='Flash'?C.flash:C.muted,'font-weight':lab==='Flash'?800:500},lab==='Flash'?'Flash-OPD':'OPD');
+      all.forEach((v,j)=>{ if(v<=0) return; const w=v*sc; s+=el('rect',{x,y:yy,width:w,height:20,fill:STAGES[j][2]},`<title>${lab==='Flash'?'Flash-OPD':'OPD'} · ${T(STAGES[j][0],STAGES[j][1])}: ${v.toFixed(1)} s</title>`); if(w>34&&j===0) s+=el('text',{x:x+w/2,y:yy+14,'text-anchor':'middle','font-size':10.5,fill:'#fff','font-weight':700},v.toFixed(1)); x+=w; });
+      s+=el('text',{x:x+6,y:yy+14,'font-size':12,fill:C.ink,'font-weight':700},tot.toFixed(1)+' s');
+    });
+    y+=86;
+  });
+  $('#stackSvg').innerHTML=s;
+  const Ls=[['G1',6122,2708,830,3509],['G2',7961,585,335,1052],['G3',6647,304,126,672],['G4',11278,569,293,2117]];
+  const lo=Math.log10(80),hi=Math.log10(20000), X=v=>70+(540-70)*(Math.log10(v)-lo)/(hi-lo); let t='';
+  [100,300,1000,3000,10000].forEach(v=>{t+=el('line',{x1:X(v),x2:X(v),y1:6,y2:316,stroke:C.grid});t+=el('text',{x:X(v),y:334,'text-anchor':'middle','font-size':11,fill:C.muted},v>=1000?(v/1000)+'k':v);});
+  t+=el('text',{x:540,y:354,'text-anchor':'end','font-size':11,fill:C.muted},T('tokens (log scale)','token（对数轴）'));
+  Ls.forEach(([id,o,m,mn,mx],i)=>{const y=18+i*78;
+    t+=el('text',{x:0,y:y+24,'font-size':13,'font-weight':700,fill:C.ink},id);
+    t+=el('rect',{x:X(80),y,width:X(o)-X(80),height:16,rx:3,fill:'#a8a29e'}); t+=el('text',{x:X(o)+6,y:y+12,'font-size':11,fill:C.muted},fmt(o));
+    t+=el('rect',{x:X(mn),y:y+24,width:X(mx)-X(mn),height:18,rx:3,fill:'#fecaca'});
+    t+=el('rect',{x:X(80),y:y+29,width:X(m)-X(80),height:8,rx:2,fill:C.flash});
+    t+=el('circle',{cx:X(m),cy:y+33,r:4.5,fill:C.flash});
+    t+=el('text',{x:X(mx)+6,y:y+37,'font-size':11.5,fill:C.flash,'font-weight':700},fmt(m)+T(`  (${(o/m).toFixed(1)}× shorter)`,`（缩短 ${(o/m).toFixed(1)}×）`));
+  });
+  $('#lenSvg').innerHTML=t;
+});
+
+/* ======================= ANALYSIS ======================= */
+(function(){
+  const H=['MATH-500','Minerva','Olympiad','GPQA','Avg.'];
+  const O={G1:[[90.40,38.40,61.60,36.93,56.83],[90.60,38.10,58.70,34.39,55.45]],G2:[[85.20,34.50,51.40,11.80,45.73],[85.20,34.30,50.00,15.23,46.18]],
+           G3:[[57.60,22.80,26.80,15.36,30.64],[59.80,23.30,29.30,13.96,31.59]],G4:[[73.50,32.90,43.60,16.24,41.56],[79.20,38.20,47.70,24.49,47.40]]};
+  function heat(){
+    let h='<div></div>'+H.map(x=>`<div class="h">${x==='Avg.'?T('Avg.','平均'):x}</div>`).join('');
+    for(const g in O){ h+=`<div class="rl">${g}</div>`; O[g][0].forEach((o,j)=>{const f=O[g][1][j],d=f-o,a=Math.min(1,Math.abs(d)/8.5)*0.85+0.06;
+      const bg=d>=0?`rgba(31,158,120,${a})`:`rgba(47,109,179,${a})`; const fg=Math.abs(d)>4?'#fff':'#111827';
+      h+=`<div class="c" style="background:${bg};color:${fg};${j===4?'box-shadow:inset 3px 0 0 #fff':''}" title="OPD ${o.toFixed(2)} → Flash-OPD ${f.toFixed(2)}">${d>=0?'+':''}${d.toFixed(2)}<small>${o.toFixed(1)} → ${f.toFixed(1)}</small></div>`;}); }
+    $('#heat').innerHTML=h;
+  }
+  function xgen(){
+    const Wd=520,Hd=290,m={l:46,r:20,t:30,b:40}, X=v=>m.l+(Wd-m.l-m.r)*v/13, Y=v=>m.t+(Hd-m.t-m.b)*(1-(v-26.5)/(29-26.5)); let s='';
+    for(let v=27;v<=29;v+=.5){s+=el('line',{x1:m.l,x2:Wd-m.r,y1:Y(v),y2:Y(v),stroke:C.grid});s+=el('text',{x:m.l-6,y:Y(v)+4,'text-anchor':'end','font-size':11,fill:C.muted},v.toFixed(1));}
+    for(let v=0;v<=12;v+=2){s+=el('text',{x:X(v),y:Hd-m.b+16,'text-anchor':'middle','font-size':11,fill:C.muted},v);} s+=el('text',{x:Wd-m.r,y:Hd-6,'text-anchor':'end','font-size':11,fill:C.muted},T('training time (h)','训练时间（h）'));
+    s+=el('text',{x:m.l-6,y:m.t-14,'text-anchor':'end','font-size':11,fill:C.muted},T('avg. %','平均 %'));
+    s+=el('line',{x1:m.l,x2:Wd-m.r,y1:Y(26.97),y2:Y(26.97),stroke:C.topd,'stroke-width':2,'stroke-dasharray':'6 4'});
+    s+=el('text',{x:X(6.5),y:Y(26.97)-7,'text-anchor':'middle','font-size':11,fill:'#b7791f'},T('untrained student 26.97','未训练学生 26.97'));
+    s+=el('line',{x1:X(1.38),x2:X(12.02),y1:Y(27.6),y2:Y(27.6),stroke:C.ink,'stroke-width':1.4});
+    s+=el('path',{d:`M${X(1.38)+8} ${Y(27.6)-5} L${X(1.38)} ${Y(27.6)} L${X(1.38)+8} ${Y(27.6)+5}`,fill:'none',stroke:C.ink,'stroke-width':1.4});
+    s+=el('text',{x:X(6.7),y:Y(27.6)-8,'text-anchor':'middle','font-size':13,'font-weight':800,fill:C.ink},T('8.71× speedup','8.71× 加速'));
+    s+=el('line',{x1:X(1.38),x2:X(1.38),y1:Y(28.45),y2:Hd-m.b,stroke:C.flash,'stroke-dasharray':'3 3','stroke-width':1});
+    s+=el('line',{x1:X(12.02),x2:X(12.02),y1:Y(28.34),y2:Hd-m.b,stroke:C.opd,'stroke-dasharray':'3 3','stroke-width':1});
+    s+=el('circle',{cx:X(12.02),cy:Y(28.34),r:7,fill:C.opd}); s+=el('text',{x:X(12.02)-10,y:Y(28.34)-13,'text-anchor':'end','font-size':12,fill:C.opd,'font-weight':700},'OPD 28.34 · 12.02 h');
+    s+=el('circle',{cx:X(1.38),cy:Y(28.45),r:8,fill:C.flash}); s+=el('text',{x:X(1.38)+13,y:Y(28.45)-11,'font-size':12,fill:C.flash,'font-weight':800},'Flash-OPD 28.45 · 1.38 h');
+    $('#xgenSvg').innerHTML=s;
+  }
+  function line(id,title,ys,yl,yfmt,yr,ticks){
+    const Wd=340,Hd=230,m={l:44,r:14,t:30,b:34},xs=[4,14,32],X=v=>m.l+(Wd-m.l-m.r)*(v-4)/28,Y=v=>m.t+(Hd-m.t-m.b)*(1-(v-yr[0])/(yr[1]-yr[0])); let s='';
+    s+=el('text',{x:0,y:14,'font-size':12.5,'font-weight':700,fill:C.ink},title);
+    const tv=ticks||[0,1,2,3,4].map(j=>yr[0]+(yr[1]-yr[0])*j/4);
+    for(const v of tv){ s+=el('line',{x1:m.l,x2:Wd-m.r,y1:Y(v),y2:Y(v),stroke:C.grid}); s+=el('text',{x:m.l-6,y:Y(v)+4,'text-anchor':'end','font-size':10.5,fill:C.muted},yfmt(v));}
+    xs.forEach(v=>s+=el('text',{x:X(v),y:Hd-m.b+16,'text-anchor':'middle','font-size':11,fill:C.muted},v+'B'));
+    s+=el('text',{x:Wd-m.r,y:Hd-4,'text-anchor':'end','font-size':10.5,fill:C.muted},T('teacher size','教师规模'));
+    [['OPD',C.opd,ys[0],ys[1]],['Flash-OPD',C.flash,ys[1],ys[0]]].forEach(([n,c,arr,oth])=>{
+      s+=el('polyline',{points:arr.map((v,i)=>X(xs[i])+','+Y(v)).join(' '),fill:'none',stroke:c,'stroke-width':2.4});
+      arr.forEach((v,i)=>{const up=v>oth[i]||(v===oth[i]&&n==='OPD'); const anc=i===0?'start':i===2?'end':'middle'; const dx=i===0?4:i===2?-4:0;
+        s+=el('circle',{cx:X(xs[i]),cy:Y(v),r:4,fill:c}); s+=el('text',{x:X(xs[i])+dx,y:Y(v)+(up?-9:17),'text-anchor':anc,'font-size':10.5,fill:c,'font-weight':700},yl(v));});
+    });
+    $(id).innerHTML=s;
+  }
+  function scaling(){
+    line('#sc1',T('Added step time over 4B (s)','相对 4B 新增的每步时间（s）'),[[0,29.1,100.6],[0,6.2,26.5]],v=>v===0?'0':'+'+v,v=>v.toFixed(0),[-8,118],[0,25,50,75,100]);
+    line('#sc2',T('Average accuracy (%)','平均准确率（%）'),[[8.59,7.89,7.38],[8.90,8.51,8.65]],v=>v.toFixed(2),v=>v.toFixed(1),[7,9.4],[7,7.5,8,8.5,9]);
+    line('#sc3',T('Rollout length (tokens, log)','Rollout 长度（token，对数轴）'),[[Math.log10(6647),Math.log10(6471),Math.log10(6397)],[Math.log10(304),Math.log10(306),Math.log10(319)]],v=>fmt(Math.pow(10,v)),v=>{const n=Math.pow(10,v);return n>=1000?fmt(n/1000)+'k':fmt(n);},[2.2,4.25],[300,1000,3000,10000].map(Math.log10));
+  }
+  const R={g1:{acc:[[40.47,40.28,40.42],[38.90,40.37,40.31],[34.40,36.26,38.49]],tok:[[3970,4054,4061],[2126,2708,3186],[173,358,738]],def:40.37},
+           g3:{acc:[[8.68,8.78,8.56],[8.68,8.90,8.92],[8.90,9.18,9.20]],tok:[[1922,3296,4409],[145,304,642],[99,197,390]],def:8.90}};
+  let robK='g1';
+  function rob(){const d=R[robK]; let h='<div></div>'+['B = 100','B = 200','B = 400'].map(x=>`<div class="h">${x}</div>`).join('');
+    ['η = 0.50','η = 0.70','η = 0.90'].forEach((e,i)=>{h+=`<div class="rl">${e}</div>`; d.acc[i].forEach((a,j)=>{const dd=a-d.def,al=Math.min(1,Math.abs(dd)/6)*0.8+0.05;
+      const bg=dd>=0?`rgba(31,158,120,${al})`:`rgba(47,109,179,${al})`; const fg=Math.abs(dd)>3?'#fff':'#111827';
+      h+=`<div class="c ${i===1&&j===1?'def':''}" style="background:${bg};color:${fg}">${a.toFixed(2)}<small style="color:${fg};opacity:.75">${fmt(d.tok[i][j])} tok</small></div>`;});});
+    $('#rgrid').innerHTML=h;}
+  $$('#robSeg button').forEach(b=>b.onclick=()=>{$$('#robSeg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');robK=b.dataset.p;rob();});
+  RENDER.push(()=>{heat(); xgen(); scaling(); rob();});
+})();
+
+/* ======================= misc ======================= */
+RENDER.push(()=>{ $('#copyBib').textContent=T('Copy BibTeX','复制 BibTeX'); });
+$('#copyBib').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText($('#bib').innerText); $('#copyBib').textContent=T('Copied','已复制'); setTimeout(()=>$('#copyBib').textContent=T('Copy BibTeX','复制 BibTeX'),1200);};
+
+setLang(LANG);
+</script>
+</body>
+</html>
